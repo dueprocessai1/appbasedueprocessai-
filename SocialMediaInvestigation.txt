@@ -1,0 +1,210 @@
+
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { InvokeLLM } from "@/integrations/Core";
+import { Globe, Search, Loader2, Link as LinkIcon, User, MessageSquare } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
+
+const socialSchema = {
+    type: "object",
+    properties: {
+        search_summary: {
+            type: "string",
+            description: "A summary of the overall findings and assessment of the subject's online presence."
+        },
+        profiles_found: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    platform: { type: "string" },
+                    url: { type: "string" },
+                    username: { type: "string" },
+                    bio: { type: "string" },
+                    confidence: { type: "string", enum: ["High", "Medium", "Low"] }
+                }
+            }
+        },
+        key_posts: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    platform: { type: "string" },
+                    post_content: { type: "string" },
+                    post_date: { type: "string" },
+                    relevance: { type: "string" },
+                    url: { type: "string" }
+                }
+            }
+        },
+        connections_analysis: {
+            type: "string",
+            description: "An analysis of the subject's key connections, associations, or groups based on public information."
+        },
+        sentiment_analysis: {
+            type: "string",
+            description: "General sentiment of public posts (e.g., negative, positive, professional)."
+        }
+    },
+    required: ["search_summary"]
+};
+
+export default function SocialMediaInvestigation() {
+    const [searchQuery, setSearchQuery] = useState("John Q. Public");
+    const [additionalInfo, setAdditionalInfo] = useState("Known to live in Metropolis, works at Public Corp. May use username 'JohnnyPublic123'.");
+    const [results, setResults] = useState(null);
+    const [isSearching, setIsSearching] = useState(false);
+    const { toast } = useToast();
+
+    const handleSearch = async () => {
+        if (!searchQuery.trim()) {
+            toast({ title: "Name Required", description: "Please enter a name to investigate.", variant: "destructive" });
+            return;
+        }
+        setIsSearching(true);
+        setResults(null);
+        try {
+            const prompt = `Conduct an ethical, public-facing social media investigation for: "${searchQuery}".
+            
+            Additional context: ${additionalInfo}
+
+            Search across all major platforms (Facebook, Twitter/X, Instagram, LinkedIn, TikTok, Reddit, etc.).
+            1.  Identify all public profiles with a confidence score (High, Medium, Low).
+            2.  Extract key biographical information from profiles.
+            3.  Identify and summarize key public posts that may be relevant to a legal case (e.g., check-ins, statements about events, photos showing activities or location).
+            4.  Analyze public connections and group memberships.
+            5.  Provide an overall summary of the subject's public online footprint.
+            
+            IMPORTANT: Do not attempt to access private profiles or information. This search must be limited to publicly available data only.`;
+
+            const result = await InvokeLLM({
+                prompt: prompt,
+                add_context_from_internet: true,
+                response_json_schema: socialSchema
+            });
+
+            setResults(result);
+            toast({ title: "Investigation Complete", description: "Social media analysis is complete." });
+        } catch (error) {
+            console.error("Search error:", error);
+            toast({ title: "Investigation Failed", description: "Unable to complete social media investigation.", variant: "destructive" });
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const getConfidenceBadge = (confidence) => {
+        switch (confidence) {
+            case "High": return "bg-green-100 text-green-800";
+            case "Medium": return "bg-yellow-100 text-yellow-800";
+            case "Low": return "bg-red-100 text-red-800";
+            default: return "bg-slate-100 text-slate-800";
+        }
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-4xl mx-auto">
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-cyan-600 to-cyan-700 rounded-xl flex items-center justify-center">
+                            <Globe className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Social Media Investigation</h1>
+                            <p className="text-slate-600 mt-1">Ethically gather and analyze public social media intelligence.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <Card className="border-0 shadow-lg bg-white mb-6">
+                    <CardHeader>
+                        <CardTitle>Investigate Online Presence</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                         <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Full Name (Required)</label>
+                            <Input placeholder="Enter full name of person" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Additional Information (Optional)</label>
+                            <Textarea placeholder="Usernames, city, age, workplace, or other details" value={additionalInfo} onChange={(e) => setAdditionalInfo(e.target.value)} />
+                        </div>
+                        <Button onClick={handleSearch} disabled={isSearching} className="bg-cyan-600 hover:bg-cyan-700 gap-2">
+                            {isSearching ? <><Loader2 className="w-4 h-4 animate-spin" /> Investigating...</> : <><Search className="w-4 h-4" /> Investigate</>}
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                {results && (
+                    <div className="space-y-6">
+                        <Card className="border-0 shadow-lg bg-white">
+                            <CardHeader>
+                                <CardTitle>Investigation Summary</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-slate-700">{results.search_summary}</p>
+                            </CardContent>
+                        </Card>
+
+                        {results.profiles_found?.length > 0 && (
+                            <Card className="border-0 shadow-lg bg-white">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2"><User className="w-5 h-5"/>Profiles Found</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {results.profiles_found.map((profile, i) => (
+                                        <div key={i} className="p-4 bg-slate-50 rounded-lg">
+                                            <div className="flex justify-between items-start">
+                                                <h4 className="font-semibold text-slate-900">{profile.platform} - @{profile.username}</h4>
+                                                <Badge className={getConfidenceBadge(profile.confidence)}>{profile.confidence} Match</Badge>
+                                            </div>
+                                            <a href={profile.url} target="_blank" rel="noopener noreferrer" className="text-sm text-cyan-600 hover:underline flex items-center gap-1"><LinkIcon className="w-3 h-3" />{profile.url}</a>
+                                            <p className="text-sm text-slate-600 mt-2 italic">"{profile.bio}"</p>
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
+                        
+                        {results.key_posts?.length > 0 && (
+                            <Card className="border-0 shadow-lg bg-white">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2"><MessageSquare className="w-5 h-5"/>Key Public Posts</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {results.key_posts.map((post, i) => (
+                                        <div key={i} className="p-4 bg-slate-50 rounded-lg">
+                                            <div className="flex justify-between items-start text-sm mb-2">
+                                                <p className="font-semibold">{post.platform} - {post.post_date}</p>
+                                                <a href={post.url} target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">View Post</a>
+                                            </div>
+                                            <p className="text-sm text-slate-700 italic">"{post.post_content}"</p>
+                                            <p className="text-xs text-slate-500 mt-2"><strong>Relevance:</strong> {post.relevance}</p>
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {results.connections_analysis && (
+                             <Card className="border-0 shadow-lg bg-white">
+                                <CardHeader>
+                                    <CardTitle>Connections Analysis</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-slate-700">{results.connections_analysis}</p>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

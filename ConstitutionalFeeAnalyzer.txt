@@ -1,0 +1,428 @@
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { InvokeLLM } from "@/integrations/Core";
+import { UploadFile } from "@/integrations/Core";
+import { DollarSign, AlertTriangle, CheckCircle, Upload, Scale, Gavel } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+
+export default function ConstitutionalFeeAnalyzer() {
+    const [feeData, setFeeData] = useState({
+        total_fees: "",
+        fine_amount: "",
+        court_costs: "",
+        restitution: "",
+        probation_fees: "",
+        monthly_income: "",
+        case_type: "",
+        jurisdiction: ""
+    });
+    const [uploadedDoc, setUploadedDoc] = useState(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const { toast } = useToast();
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            const { file_url } = await UploadFile({ file });
+            setUploadedDoc({ name: file.name, url: file_url });
+            toast({
+                title: "Document Uploaded",
+                description: "Your sentencing or fee document has been uploaded successfully."
+            });
+        } catch (error) {
+            console.error("Upload error:", error);
+            toast({
+                title: "Upload Failed",
+                description: "Unable to upload document. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const analyzeFees = async () => {
+        if (!feeData.total_fees && !uploadedDoc) {
+            toast({
+                title: "Missing Information",
+                description: "Please provide fee amounts or upload a document.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsAnalyzing(true);
+        try {
+            let analysisPrompt = `Analyze these court fees and fines for potential Eighth Amendment (Excessive Fines Clause) violations:
+
+Total Fees: $${feeData.total_fees}
+Fine Amount: $${feeData.fine_amount}
+Court Costs: $${feeData.court_costs}
+Restitution: $${feeData.restitution}
+Probation Fees: $${feeData.probation_fees}
+Defendant's Monthly Income: $${feeData.monthly_income}
+Case Type: ${feeData.case_type}
+Jurisdiction: ${feeData.jurisdiction}
+
+Based on Timbs v. Indiana and other relevant case law, analyze:
+1. Whether these fees are constitutionally excessive
+2. The ratio of fees to income and ability to pay
+3. Comparison to similar cases and standard practices
+4. Specific constitutional violations
+5. Recommended legal arguments and motions`;
+
+            const requestData = {
+                prompt: analysisPrompt,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        constitutional_violation: { type: "boolean" },
+                        violation_type: { type: "string" },
+                        excessive_analysis: { type: "string" },
+                        ability_to_pay_analysis: { type: "string" },
+                        comparable_cases: { type: "array", items: { type: "string" } },
+                        recommended_motions: { type: "array", items: { type: "string" } },
+                        legal_arguments: { type: "array", items: { type: "string" } },
+                        severity_score: { type: "integer", minimum: 1, maximum: 10 }
+                    }
+                }
+            };
+
+            // If document uploaded, include it in analysis
+            if (uploadedDoc) {
+                requestData.file_urls = [uploadedDoc.url];
+            }
+
+            const result = await InvokeLLM(requestData);
+            setAnalysisResult(result);
+
+            toast({
+                title: "Analysis Complete",
+                description: "Constitutional fee analysis has been generated."
+            });
+
+        } catch (error) {
+            console.error("Analysis error:", error);
+            toast({
+                title: "Analysis Failed", 
+                description: "Unable to analyze fees. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center">
+                            <DollarSign className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Constitutional Fee & Fine Analyzer</h1>
+                            <p className="text-slate-600 mt-1">Challenge excessive fines under the Eighth Amendment</p>
+                        </div>
+                    </div>
+
+                    <Alert className="bg-red-50 border-red-200">
+                        <Scale className="h-4 w-4 text-red-600" />
+                        <AlertTitle className="text-red-900">Excessive Fines Are Unconstitutional</AlertTitle>
+                        <AlertDescription className="text-red-800">
+                            The Eighth Amendment prohibits "excessive fines." In <em>Timbs v. Indiana</em> (2019), the Supreme Court ruled this applies to state and local governments. This tool analyzes whether your court-imposed fees violate this constitutional protection.
+                        </AlertDescription>
+                    </Alert>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Input Form */}
+                    <div className="space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Fee Information</CardTitle>
+                                <p className="text-sm text-slate-600">Enter the amounts from your court documents</p>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="total_fees">Total Fees & Fines</Label>
+                                        <div className="relative">
+                                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                                            <Input
+                                                id="total_fees"
+                                                type="number"
+                                                className="pl-8"
+                                                value={feeData.total_fees}
+                                                onChange={(e) => setFeeData({...feeData, total_fees: e.target.value})}
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="fine_amount">Fine Amount</Label>
+                                        <div className="relative">
+                                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                                            <Input
+                                                id="fine_amount"
+                                                type="number"
+                                                className="pl-8"
+                                                value={feeData.fine_amount}
+                                                onChange={(e) => setFeeData({...feeData, fine_amount: e.target.value})}
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="court_costs">Court Costs</Label>
+                                        <div className="relative">
+                                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                                            <Input
+                                                id="court_costs"
+                                                type="number"
+                                                className="pl-8"
+                                                value={feeData.court_costs}
+                                                onChange={(e) => setFeeData({...feeData, court_costs: e.target.value})}
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="restitution">Restitution</Label>
+                                        <div className="relative">
+                                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                                            <Input
+                                                id="restitution"
+                                                type="number"
+                                                className="pl-8"
+                                                value={feeData.restitution}
+                                                onChange={(e) => setFeeData({...feeData, restitution: e.target.value})}
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="probation_fees">Probation Fees</Label>
+                                        <div className="relative">
+                                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                                            <Input
+                                                id="probation_fees"
+                                                type="number"
+                                                className="pl-8"
+                                                value={feeData.probation_fees}
+                                                onChange={(e) => setFeeData({...feeData, probation_fees: e.target.value})}
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="monthly_income">Your Monthly Income</Label>
+                                        <div className="relative">
+                                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                                            <Input
+                                                id="monthly_income"
+                                                type="number"
+                                                className="pl-8"
+                                                value={feeData.monthly_income}
+                                                onChange={(e) => setFeeData({...feeData, monthly_income: e.target.value})}
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="case_type">Case Type</Label>
+                                    <Input
+                                        id="case_type"
+                                        value={feeData.case_type}
+                                        onChange={(e) => setFeeData({...feeData, case_type: e.target.value})}
+                                        placeholder="e.g., DUI, Traffic, Misdemeanor, etc."
+                                    />
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="jurisdiction">Court/Jurisdiction</Label>
+                                    <Input
+                                        id="jurisdiction"
+                                        value={feeData.jurisdiction}
+                                        onChange={(e) => setFeeData({...feeData, jurisdiction: e.target.value})}
+                                        placeholder="e.g., Los Angeles County Superior Court"
+                                    />
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Upload Court Documents (Optional)</CardTitle>
+                                <p className="text-sm text-slate-600">Upload your sentencing order or fee documents</p>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                    <div className="mt-4">
+                                        <input
+                                            type="file"
+                                            id="document-upload"
+                                            className="sr-only"
+                                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                            onChange={handleFileUpload}
+                                            disabled={isUploading}
+                                        />
+                                        <label htmlFor="document-upload" className="cursor-pointer">
+                                            <Button variant="outline" disabled={isUploading} asChild>
+                                                <span>
+                                                    {isUploading ? "Uploading..." : "Choose File"}
+                                                </span>
+                                            </Button>
+                                        </label>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            PDF, Word, or image files
+                                        </p>
+                                    </div>
+                                </div>
+                                {uploadedDoc && (
+                                    <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                        <div className="flex items-center">
+                                            <CheckCircle className="h-5 w-5 text-green-600" />
+                                            <span className="ml-2 text-sm font-medium text-green-900">{uploadedDoc.name}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Button onClick={analyzeFees} disabled={isAnalyzing} className="w-full">
+                            {isAnalyzing ? (
+                                <>
+                                    <Scale className="w-4 h-4 mr-2 animate-spin" />
+                                    Analyzing Constitutional Issues...
+                                </>
+                            ) : (
+                                <>
+                                    <Gavel className="w-4 h-4 mr-2" />
+                                    Analyze for Constitutional Violations
+                                </>
+                            )}
+                        </Button>
+                    </div>
+
+                    {/* Results Panel */}
+                    <div>
+                        {analysisResult ? (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        {analysisResult.constitutional_violation ? (
+                                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                                        ) : (
+                                            <CheckCircle className="w-5 h-5 text-green-600" />
+                                        )}
+                                        Constitutional Analysis
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <div>
+                                        <Badge 
+                                            className={analysisResult.constitutional_violation 
+                                                ? 'bg-red-100 text-red-800 border-red-200' 
+                                                : 'bg-green-100 text-green-800 border-green-200'
+                                            }
+                                        >
+                                            {analysisResult.constitutional_violation ? "VIOLATION DETECTED" : "LIKELY CONSTITUTIONAL"}
+                                        </Badge>
+                                        {analysisResult.severity_score && (
+                                            <Badge variant="outline" className="ml-2">
+                                                Severity: {analysisResult.severity_score}/10
+                                            </Badge>
+                                        )}
+                                    </div>
+
+                                    {analysisResult.violation_type && (
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Type of Violation</h4>
+                                            <p className="text-sm text-slate-600">{analysisResult.violation_type}</p>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <h4 className="font-semibold mb-2">Excessive Fines Analysis</h4>
+                                        <p className="text-sm text-slate-600">{analysisResult.excessive_analysis}</p>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="font-semibold mb-2">Ability to Pay Analysis</h4>
+                                        <p className="text-sm text-slate-600">{analysisResult.ability_to_pay_analysis}</p>
+                                    </div>
+
+                                    {analysisResult.recommended_motions && (
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Recommended Legal Motions</h4>
+                                            <ul className="text-sm text-slate-600 list-disc list-inside space-y-1">
+                                                {analysisResult.recommended_motions.map((motion, index) => (
+                                                    <li key={index}>{motion}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {analysisResult.legal_arguments && (
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Legal Arguments</h4>
+                                            <ul className="text-sm text-slate-600 list-disc list-inside space-y-1">
+                                                {analysisResult.legal_arguments.map((argument, index) => (
+                                                    <li key={index}>{argument}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {analysisResult.comparable_cases && (
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Comparable Case Law</h4>
+                                            <ul className="text-sm text-slate-600 list-disc list-inside space-y-1">
+                                                {analysisResult.comparable_cases.map((case_ref, index) => (
+                                                    <li key={index}>{case_ref}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card>
+                                <CardContent className="p-12 text-center">
+                                    <Scale className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Ready for Analysis</h3>
+                                    <p className="text-slate-600 text-sm">
+                                        Enter your fee information and click analyze to check for constitutional violations.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

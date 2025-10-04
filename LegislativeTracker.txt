@@ -1,0 +1,229 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { LegislativeThreat } from "@/entities/LegislativeThreat";
+import { AlertTriangle, ExternalLink, Bell, TrendingUp, Shield } from "lucide-react";
+
+export default function LegislativeTracker() {
+    const [threats, setThreats] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedThreatLevel, setSelectedThreatLevel] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        loadThreats();
+    }, []);
+
+    const loadThreats = async () => {
+        setIsLoading(true);
+        try {
+            const data = await LegislativeThreat.list("-last_action_date", 100);
+            setThreats(data);
+        } catch (error) {
+            console.error("Error loading threats:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const filteredThreats = threats.filter(threat => {
+        const matchesSearch = !searchTerm || 
+            threat.bill_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            threat.bill_number.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesThreat = !selectedThreatLevel || threat.threat_level === selectedThreatLevel;
+        return matchesSearch && matchesThreat && threat.tracking_active;
+    });
+
+    const threatLevelColors = {
+        critical: "bg-red-100 text-red-800 border-red-200",
+        high: "bg-orange-100 text-orange-800 border-orange-200", 
+        medium: "bg-yellow-100 text-yellow-800 border-yellow-200",
+        low: "bg-green-100 text-green-800 border-green-200"
+    };
+
+    const statusColors = {
+        introduced: "bg-blue-100 text-blue-800 border-blue-200",
+        committee: "bg-purple-100 text-purple-800 border-purple-200",
+        floor_vote: "bg-orange-100 text-orange-800 border-orange-200",
+        passed_chamber: "bg-red-100 text-red-800 border-red-200",
+        other_chamber: "bg-red-100 text-red-800 border-red-200",
+        signed: "bg-red-600 text-white",
+        vetoed: "bg-green-100 text-green-800 border-green-200",
+        dead: "bg-gray-100 text-gray-800 border-gray-200"
+    };
+
+    const ThreatCard = ({ threat }) => (
+        <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 className="font-semibold text-lg mb-1">{threat.bill_number}</h3>
+                        <p className="text-slate-600 text-sm">{threat.jurisdiction} • {threat.state}</p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <Badge className={threatLevelColors[threat.threat_level]}>
+                            {threat.threat_level} threat
+                        </Badge>
+                        <Badge className={statusColors[threat.bill_status]}>
+                            {threat.bill_status.replace('_', ' ')}
+                        </Badge>
+                    </div>
+                </div>
+
+                <h4 className="font-medium text-slate-900 mb-3">{threat.bill_title}</h4>
+
+                {threat.bill_summary && (
+                    <p className="text-sm text-slate-600 mb-4 line-clamp-3">{threat.bill_summary}</p>
+                )}
+
+                {threat.threat_analysis && (
+                    <div className="mb-4">
+                        <h5 className="font-medium text-slate-900 mb-2">Threat Analysis:</h5>
+                        <p className="text-sm text-slate-700 line-clamp-2">{threat.threat_analysis}</p>
+                    </div>
+                )}
+
+                {threat.affected_rights && threat.affected_rights.length > 0 && (
+                    <div className="mb-4">
+                        <h5 className="font-medium text-slate-900 mb-2">Rights Affected:</h5>
+                        <div className="flex flex-wrap gap-1">
+                            {threat.affected_rights.map((right, index) => (
+                                <Badge key={index} variant="outline" className="text-xs">
+                                    {right.replace('_', ' ')}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex justify-between items-center text-sm text-slate-600">
+                    <span>Last Action: {threat.last_action_date ? new Date(threat.last_action_date).toLocaleDateString() : 'Unknown'}</span>
+                    {threat.full_text_url && (
+                        <Button variant="link" size="sm" className="p-0 h-auto" asChild>
+                            <a href={threat.full_text_url} target="_blank" rel="noopener noreferrer">
+                                Full Text <ExternalLink className="w-3 h-3 ml-1" />
+                            </a>
+                        </Button>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    );
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-amber-600 to-orange-600 rounded-xl flex items-center justify-center">
+                            <Shield className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Legislative Threat & Rights Tracker</h1>
+                            <p className="text-slate-600 mt-1">Monitor legislation that could impact your constitutional rights</p>
+                        </div>
+                    </div>
+
+                    <Alert className="bg-amber-50 border-amber-200">
+                        <Bell className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="text-amber-900">Stay Informed, Stay Protected</AlertTitle>
+                        <AlertDescription className="text-amber-800">
+                            This tracker monitors proposed laws that could restrict civil liberties, increase government surveillance, or weaken due process protections. Knowledge is your first line of defense.
+                        </AlertDescription>
+                    </Alert>
+                </div>
+
+                {/* Summary Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <Card className="border-red-200 bg-red-50">
+                        <CardContent className="p-4 text-center">
+                            <div className="text-2xl font-bold text-red-700">
+                                {threats.filter(t => t.threat_level === 'critical').length}
+                            </div>
+                            <div className="text-sm text-red-600">Critical Threats</div>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-orange-200 bg-orange-50">
+                        <CardContent className="p-4 text-center">
+                            <div className="text-2xl font-bold text-orange-700">
+                                {threats.filter(t => t.threat_level === 'high').length}
+                            </div>
+                            <div className="text-sm text-orange-600">High Threats</div>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-blue-200 bg-blue-50">
+                        <CardContent className="p-4 text-center">
+                            <div className="text-2xl font-bold text-blue-700">
+                                {threats.filter(t => ['floor_vote', 'passed_chamber', 'other_chamber'].includes(t.bill_status)).length}
+                            </div>
+                            <div className="text-sm text-blue-600">Active Bills</div>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-slate-200 bg-slate-50">
+                        <CardContent className="p-4 text-center">
+                            <div className="text-2xl font-bold text-slate-700">
+                                {threats.filter(t => t.jurisdiction === 'federal').length}
+                            </div>
+                            <div className="text-sm text-slate-600">Federal Bills</div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Search and Filters */}
+                <Card className="mb-8">
+                    <CardContent className="p-4">
+                        <div className="flex gap-4">
+                            <Input
+                                placeholder="Search bills by number or title..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="flex-1"
+                            />
+                            <select
+                                className="px-3 py-2 border border-gray-300 rounded-md"
+                                value={selectedThreatLevel}
+                                onChange={(e) => setSelectedThreatLevel(e.target.value)}
+                            >
+                                <option value="">All Threat Levels</option>
+                                <option value="critical">Critical</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                            <Button onClick={loadThreats} disabled={isLoading}>
+                                <TrendingUp className="w-4 h-4 mr-2" />
+                                {isLoading ? "Loading..." : "Refresh"}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Threats List */}
+                {filteredThreats.length === 0 ? (
+                    <Card>
+                        <CardContent className="p-12 text-center">
+                            <Shield className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-slate-900 mb-2">No Legislative Threats Found</h3>
+                            <p className="text-slate-600">
+                                {searchTerm || selectedThreatLevel 
+                                    ? "No bills match your current filters." 
+                                    : "This tracker is updated regularly. Check back for new legislative threats to civil liberties."
+                                }
+                            </p>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {filteredThreats.map((threat) => (
+                            <ThreatCard key={threat.id} threat={threat} />
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

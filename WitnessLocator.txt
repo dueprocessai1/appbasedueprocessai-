@@ -1,0 +1,289 @@
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { InvokeLLM } from "@/integrations/Core";
+import { Users, Search, Loader2, Phone, MapPin, User, Calendar } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+
+const witnessSearchSchema = {
+    type: "object",
+    properties: {
+        search_results: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    full_name: { type: "string" },
+                    age_range: { type: "string" },
+                    current_address: { type: "string" },
+                    previous_addresses: { type: "array", items: { type: "string" } },
+                    phone_numbers: { type: "array", items: { type: "string" } },
+                    email_addresses: { type: "array", items: { type: "string" } },
+                    employment: { type: "string" },
+                    relatives: { type: "array", items: { type: "string" } },
+                    social_media_profiles: { type: "array", items: { type: "string" } },
+                    confidence_score: { type: "integer", minimum: 0, maximum: 100 }
+                }
+            }
+        },
+        alternative_spellings: {
+            type: "array",
+            items: { type: "string" },
+            description: "Possible alternative spellings or variations of the name"
+        },
+        search_suggestions: {
+            type: "array",
+            items: { type: "string" },
+            description: "Additional search strategies or information that might help locate the person"
+        }
+    },
+    required: ["search_results"]
+};
+
+export default function WitnessLocator() {
+    const [searchQuery, setSearchQuery] = useState("");
+    const [additionalInfo, setAdditionalInfo] = useState("");
+    const [results, setResults] = useState(null);
+    const [isSearching, setIsSearching] = useState(false);
+    const { toast } = useToast();
+
+    const handleSearch = async () => {
+        if (!searchQuery.trim()) {
+            toast({
+                title: "Name Required",
+                description: "Please enter a name to search for.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsSearching(true);
+        setResults(null);
+
+        try {
+            const prompt = `Locate current contact information and background details for: "${searchQuery}"
+
+Additional context: ${additionalInfo}
+
+Please search for:
+- Current and previous addresses
+- Phone numbers (landline and mobile)
+- Email addresses
+- Employment information
+- Social media profiles
+- Known relatives and associates
+- Alternative name spellings or variations
+- Age and demographic information
+
+Use all available public records, directory services, and publicly accessible information sources. Provide confidence scores for each result based on how certain you are about the match.
+
+Important: Only provide information that is publicly available and legally obtainable. Do not provide any information that violates privacy laws.`;
+
+            const result = await InvokeLLM({
+                prompt: prompt,
+                add_context_from_internet: true,
+                response_json_schema: witnessSearchSchema
+            });
+
+            setResults(result);
+            toast({
+                title: "Search Complete",
+                description: `Found ${result.search_results?.length || 0} potential matches.`,
+            });
+        } catch (error) {
+            console.error("Search error:", error);
+            toast({
+                title: "Search Failed",
+                description: "Unable to complete search. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const getConfidenceColor = (score) => {
+        if (score >= 80) return "text-green-600 bg-green-50";
+        if (score >= 60) return "text-yellow-600 bg-yellow-50";
+        return "text-red-600 bg-red-50";
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-4xl mx-auto">
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl flex items-center justify-center">
+                            <Users className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Witness & Contact Locator</h1>
+                            <p className="text-slate-600 mt-1">Find current contact information for witnesses and key individuals.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <Card className="border-0 shadow-lg bg-white mb-6">
+                    <CardHeader>
+                        <CardTitle>Locate Person</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Full Name (Required)
+                            </label>
+                            <Input 
+                                placeholder="Enter full name of person to locate" 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Additional Information (Optional)
+                            </label>
+                            <Input 
+                                placeholder="Age, city, occupation, or other identifying details" 
+                                value={additionalInfo}
+                                onChange={(e) => setAdditionalInfo(e.target.value)}
+                            />
+                        </div>
+                        
+                        <Button 
+                            onClick={handleSearch} 
+                            disabled={isSearching}
+                            className="bg-indigo-600 hover:bg-indigo-700 gap-2"
+                        >
+                            {isSearching ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Searching...</>
+                            ) : (
+                                <><Search className="w-4 h-4" /> Locate Person</>
+                            )}
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                {results && (
+                    <div className="space-y-6">
+                        {results.search_results?.length > 0 ? (
+                            <>
+                                <Card className="border-0 shadow-lg bg-white">
+                                    <CardHeader>
+                                        <CardTitle>Search Results ({results.search_results.length} found)</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-6">
+                                            {results.search_results.map((person, index) => (
+                                                <div key={index} className="p-6 bg-slate-50 rounded-lg border">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <h3 className="text-lg font-semibold text-slate-900">{person.full_name}</h3>
+                                                        <div className={`px-3 py-1 rounded-full text-sm font-medium ${getConfidenceColor(person.confidence_score)}`}>
+                                                            {person.confidence_score}% Match
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {person.current_address && (
+                                                            <div className="flex items-start gap-3">
+                                                                <MapPin className="w-5 h-5 text-slate-500 mt-0.5" />
+                                                                <div>
+                                                                    <p className="font-medium text-slate-900">Current Address</p>
+                                                                    <p className="text-sm text-slate-600">{person.current_address}</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {person.phone_numbers?.length > 0 && (
+                                                            <div className="flex items-start gap-3">
+                                                                <Phone className="w-5 h-5 text-slate-500 mt-0.5" />
+                                                                <div>
+                                                                    <p className="font-medium text-slate-900">Phone Numbers</p>
+                                                                    {person.phone_numbers.map((phone, i) => (
+                                                                        <p key={i} className="text-sm text-slate-600">{phone}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {person.age_range && (
+                                                            <div className="flex items-start gap-3">
+                                                                <User className="w-5 h-5 text-slate-500 mt-0.5" />
+                                                                <div>
+                                                                    <p className="font-medium text-slate-900">Age Range</p>
+                                                                    <p className="text-sm text-slate-600">{person.age_range}</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {person.employment && (
+                                                            <div className="flex items-start gap-3">
+                                                                <Calendar className="w-5 h-5 text-slate-500 mt-0.5" />
+                                                                <div>
+                                                                    <p className="font-medium text-slate-900">Employment</p>
+                                                                    <p className="text-sm text-slate-600">{person.employment}</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {person.previous_addresses?.length > 0 && (
+                                                        <div className="mt-4">
+                                                            <p className="font-medium text-slate-900 mb-2">Previous Addresses</p>
+                                                            <div className="text-sm text-slate-600 space-y-1">
+                                                                {person.previous_addresses.map((address, i) => (
+                                                                    <p key={i}>• {address}</p>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {person.relatives?.length > 0 && (
+                                                        <div className="mt-4">
+                                                            <p className="font-medium text-slate-900 mb-2">Known Relatives</p>
+                                                            <p className="text-sm text-slate-600">{person.relatives.join(', ')}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {results.search_suggestions?.length > 0 && (
+                                    <Card className="border-0 shadow-lg bg-white">
+                                        <CardHeader>
+                                            <CardTitle>Additional Search Strategies</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="list-disc list-inside space-y-2 text-sm text-slate-700">
+                                                {results.search_suggestions.map((suggestion, index) => (
+                                                    <li key={index}>{suggestion}</li>
+                                                ))}
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </>
+                        ) : (
+                            <Card className="border-0 shadow-lg bg-white">
+                                <CardContent className="p-12 text-center">
+                                    <Users className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-slate-900 mb-2">No Results Found</h3>
+                                    <p className="text-slate-600">Try searching with alternative spellings or additional information.</p>
+                                    {results.alternative_spellings?.length > 0 && (
+                                        <div className="mt-4">
+                                            <p className="text-sm font-medium text-slate-700 mb-2">Try these variations:</p>
+                                            <p className="text-sm text-slate-600">{results.alternative_spellings.join(', ')}</p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

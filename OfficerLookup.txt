@@ -1,0 +1,379 @@
+
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { InvokeLLM } from "@/integrations/Core";
+import { Shield, Search, Loader2, AlertTriangle, ExternalLink, Building } from "lucide-react";
+
+const officerSearchSchema = {
+    type: "object",
+    properties: {
+        officer_found: {
+            type: "boolean",
+            description: "Whether any information was found about this officer"
+        },
+        summary: {
+            type: "string", 
+            description: "A brief summary of findings about this officer"
+        },
+        news_reports: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    title: { type: "string" },
+                    source: { type: "string" },
+                    date: { type: "string" },
+                    summary: { type: "string" }
+                }
+            },
+            description: "News reports mentioning this officer"
+        },
+        court_cases: {
+            type: "array",
+            items: {
+                type: "object", 
+                properties: {
+                    case_name: { type: "string" },
+                    court: { type: "string" },
+                    date: { type: "string" },
+                    outcome: { type: "string" }
+                }
+            },
+            description: "Court cases involving this officer"
+        },
+        disciplinary_actions: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    date: { type: "string" },
+                    action: { type: "string" },
+                    reason: { type: "string" }
+                }
+            },
+            description: "Known disciplinary actions"
+        },
+        risk_level: {
+            type: "string",
+            enum: ["low", "medium", "high", "unknown"],
+            description: "Assessment of risk level based on available information"
+        }
+    },
+    required: ["officer_found", "summary", "risk_level"]
+};
+
+const agencySearchSchema = {
+    type: "object",
+    properties: {
+        agency_found: {
+            type: "boolean",
+            description: "Whether any public information was found for this agency."
+        },
+        overall_summary: {
+            type: "string",
+            description: "A high-level summary of the agency's public record regarding misconduct, major lawsuits, or Department of Justice investigations."
+        },
+        major_incidents: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    title: { type: "string", description: "The title or name of the incident, lawsuit, or report." },
+                    date: { type: "string", description: "The approximate date of the incident or report." },
+                    summary: { type: "string", description: "A brief summary of the event and its outcome." },
+                    source_url: { type: "string", description: "A URL to a news article or official report about the incident." }
+                },
+                required: ["title", "summary"]
+            },
+            description: "A list of significant, publicly-reported incidents involving the agency."
+        },
+        common_complaint_types: {
+            type: "array",
+            items: { type: "string" },
+            description: "A list of recurring types of complaints publicly filed against the agency (e.g., 'Excessive Force', 'Racial Profiling')."
+        },
+        systemic_risk_assessment: {
+            type: "string",
+            enum: ["Low", "Medium", "High", "Significant"],
+            description: "An AI-assessed risk level for systemic issues based on the volume and severity of public data."
+        }
+    },
+    required: ["agency_found", "overall_summary", "systemic_risk_assessment"]
+};
+
+export default function OfficerLookup() {
+    const [searchData, setSearchData] = useState({
+        officer_name: "",
+        badge_number: "",
+        agency: ""
+    });
+    const [results, setResults] = useState(null);
+    const [searchType, setSearchType] = useState(null); // can be 'officer' or 'agency'
+    const [isSearching, setIsSearching] = useState(false);
+    const [error, setError] = useState(null);
+
+    const handleSearch = async () => {
+        const isOfficerSearch = searchData.officer_name || searchData.badge_number;
+        const isAgencySearch = !isOfficerSearch && searchData.agency; // Agency search only if no officer name/badge
+
+        if (!isOfficerSearch && !isAgencySearch) {
+            setError("Please provide at least an officer's name/badge or an agency name to search.");
+            return;
+        }
+        
+        setIsSearching(true);
+        setError(null);
+        setResults(null);
+        
+        const currentSearchType = isAgencySearch ? 'agency' : 'officer';
+        setSearchType(currentSearchType);
+
+        try {
+            let prompt = "";
+            let schema = {};
+
+            if (currentSearchType === 'agency') {
+                prompt = `Perform a comprehensive public records search for the law enforcement agency: "${searchData.agency}". Focus on identifying systemic issues, patterns of misconduct, major lawsuits, consent decrees, Department of Justice investigations, and widespread 'red flag' incidents reported in the news. Summarize the findings according to the provided JSON schema.`;
+                schema = agencySearchSchema;
+            } else {
+                prompt = `Search for publicly available information about law enforcement officer: ${searchData.officer_name ? `Name: ${searchData.officer_name}` : ''} ${searchData.badge_number ? `Badge: ${searchData.badge_number}` : ''} ${searchData.agency ? `from agency: ${searchData.agency}` : ''}. Look for news reports, court cases, disciplinary actions, and any public records. Be factual and cite sources.`;
+                schema = officerSearchSchema;
+            }
+
+            const result = await InvokeLLM({
+                prompt: prompt,
+                add_context_from_internet: true,
+                response_json_schema: schema
+            });
+
+            setResults(result);
+        } catch (err) {
+            console.error("Search error:", err);
+            setError("Search failed. Please try again or check your internet connection.");
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const getRiskColor = (level) => {
+        switch (level?.toLowerCase()) { // Convert to lowercase for consistent matching
+            case 'high': 
+            case 'significant': return 'bg-red-100 text-red-800 border-red-200';
+            case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'low': return 'bg-green-100 text-green-800 border-green-200';
+            default: return 'bg-slate-100 text-slate-800 border-slate-200';
+        }
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-4xl mx-auto">
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center">
+                            <Shield className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Officer & Agency Background Check</h1>
+                            <p className="text-slate-600 mt-1">Search public records for law enforcement personnel and agencies.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <Card className="border-0 shadow-lg bg-white mb-6">
+                    <CardHeader>
+                        <CardTitle>Search Public Records</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <p className="text-slate-700">Search for a specific officer (by name/badge) OR search for an entire agency to find systemic red flags.</p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Input 
+                                placeholder="Officer Name" 
+                                value={searchData.officer_name}
+                                onChange={(e) => setSearchData({...searchData, officer_name: e.target.value})}
+                            />
+                            <Input 
+                                placeholder="Badge Number" 
+                                value={searchData.badge_number}
+                                onChange={(e) => setSearchData({...searchData, badge_number: e.target.value})}
+                            />
+                            <Input 
+                                placeholder="Agency (e.g., NYPD)" 
+                                value={searchData.agency}
+                                onChange={(e) => setSearchData({...searchData, agency: e.target.value})}
+                            />
+                        </div>
+                        
+                        <Button 
+                            onClick={handleSearch} 
+                            disabled={isSearching}
+                            className="bg-purple-600 hover:bg-purple-700 gap-2"
+                        >
+                            {isSearching ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Searching...</>
+                            ) : (
+                                <><Search className="w-4 h-4" /> Search Records</>
+                            )}
+                        </Button>
+
+                        {error && (
+                            <Alert variant="destructive">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertDescription>{error}</AlertDescription>
+                            </Alert>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Officer Results */}
+                {results && searchType === 'officer' && (
+                    <Card className="border-0 shadow-lg bg-white">
+                        <CardHeader>
+                            <div className="flex justify-between items-start">
+                                <CardTitle>Officer Search Results</CardTitle>
+                                <Badge className={`${getRiskColor(results.risk_level)} border`}>
+                                    {results.risk_level} risk
+                                </Badge>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {!results.officer_found ? (
+                                <div className="text-center py-8">
+                                    <AlertTriangle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-slate-900 mb-2">No Records Found</h3>
+                                    <p className="text-slate-600">No publicly available information was found for this officer.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900 mb-2">Summary</h3>
+                                        <p className="text-slate-700">{results.summary}</p>
+                                    </div>
+
+                                    {results.news_reports && results.news_reports.length > 0 && (
+                                        <div>
+                                            <h3 className="font-semibold text-slate-900 mb-3">News Reports</h3>
+                                            <div className="space-y-3">
+                                                {results.news_reports.map((report, index) => (
+                                                    <div key={index} className="p-3 bg-slate-50 rounded-lg">
+                                                        <h4 className="font-medium text-slate-900">{report.title}</h4>
+                                                        <div className="text-sm text-slate-600 mb-2">
+                                                            {report.source} • {report.date}
+                                                        </div>
+                                                        <p className="text-sm text-slate-700">{report.summary}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {results.court_cases && results.court_cases.length > 0 && (
+                                        <div>
+                                            <h3 className="font-semibold text-slate-900 mb-3">Court Cases</h3>
+                                            <div className="space-y-3">
+                                                {results.court_cases.map((case_, index) => (
+                                                    <div key={index} className="p-3 bg-blue-50 rounded-lg">
+                                                        <h4 className="font-medium text-slate-900">{case_.case_name}</h4>
+                                                        <div className="text-sm text-slate-600 mb-2">
+                                                            {case_.court} • {case_.date}
+                                                        </div>
+                                                        <p className="text-sm text-slate-700">{case_.outcome}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {results.disciplinary_actions && results.disciplinary_actions.length > 0 && (
+                                        <div>
+                                            <h3 className="font-semibold text-slate-900 mb-3">Disciplinary Actions</h3>
+                                            <div className="space-y-3">
+                                                {results.disciplinary_actions.map((action, index) => (
+                                                    <div key={index} className="p-3 bg-red-50 rounded-lg">
+                                                        <div className="text-sm text-slate-600 mb-1">{action.date}</div>
+                                                        <h4 className="font-medium text-slate-900">{action.action}</h4>
+                                                        <p className="text-sm text-slate-700">{action.reason}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Agency Results */}
+                {results && searchType === 'agency' && (
+                    <Card className="border-0 shadow-lg bg-white">
+                        <CardHeader>
+                            <div className="flex justify-between items-start">
+                                <CardTitle>Agency Search Results for: {searchData.agency}</CardTitle>
+                                <Badge className={`${getRiskColor(results.systemic_risk_assessment)} border`}>
+                                    {results.systemic_risk_assessment} risk
+                                </Badge>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                             {!results.agency_found ? (
+                                <div className="text-center py-8">
+                                    <AlertTriangle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-slate-900 mb-2">No Records Found</h3>
+                                    <p className="text-slate-600">No publicly available information was found for this agency.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900 mb-2">Overall Summary</h3>
+                                        <p className="text-slate-700 bg-slate-50 p-4 rounded-lg">{results.overall_summary}</p>
+                                    </div>
+
+                                    {results.major_incidents && results.major_incidents.length > 0 && (
+                                        <div>
+                                            <h3 className="font-semibold text-slate-900 mb-3">Major Incidents & Reports</h3>
+                                            <div className="space-y-3">
+                                                {results.major_incidents.map((incident, index) => (
+                                                    <div key={index} className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                                                        <h4 className="font-medium text-slate-900">{incident.title}</h4>
+                                                        <div className="text-sm text-slate-600 mb-2">
+                                                            {incident.date}
+                                                        </div>
+                                                        <p className="text-sm text-slate-700 mb-2">{incident.summary}</p>
+                                                        {incident.source_url && (
+                                                            <a href={incident.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                                                Read More <ExternalLink className="inline w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {results.common_complaint_types && results.common_complaint_types.length > 0 && (
+                                        <div>
+                                            <h3 className="font-semibold text-slate-900 mb-3">Common Complaint Types</h3>
+                                            <div className="flex flex-wrap gap-2">
+                                                {results.common_complaint_types.map((type, index) => (
+                                                    <Badge key={index} variant="secondary" className="bg-yellow-100 text-yellow-800">
+                                                        {type}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
+        </div>
+    );
+}

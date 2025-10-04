@@ -1,0 +1,463 @@
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InvokeLLM } from "@/integrations/Core";
+import { BookOpen, Search, ArrowRight, Scale, FileText, Clock } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+
+export default function LegalTranslator() {
+    const [legalText, setLegalText] = useState('');
+    const [translatedText, setTranslatedText] = useState('');
+    const [isTranslating, setIsTranslating] = useState(false);
+    const [caseQuery, setCaseQuery] = useState('');
+    const [caseLawResults, setCaseLawResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const { toast } = useToast();
+
+    const translateText = async () => {
+        if (!legalText.trim()) {
+            toast({
+                title: "No Text to Translate",
+                description: "Please paste some legal text first.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsTranslating(true);
+        try {
+            const prompt = `Translate this legal text into simple, easy-to-understand English. Explain legal terms, break down complex sentences, and make it accessible to a general audience:
+
+${legalText}
+
+Provide:
+1. A clear, plain-English translation
+2. Definitions of key legal terms
+3. Explanation of what this means for an ordinary person`;
+
+            const result = await InvokeLLM({
+                prompt,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        plain_english: { type: "string" },
+                        key_terms: { 
+                            type: "array", 
+                            items: { 
+                                type: "object",
+                                properties: {
+                                    term: { type: "string" },
+                                    definition: { type: "string" }
+                                }
+                            }
+                        },
+                        practical_meaning: { type: "string" }
+                    }
+                }
+            });
+
+            setTranslatedText(result);
+            toast({
+                title: "Translation Complete",
+                description: "Your legal text has been translated to plain English."
+            });
+
+        } catch (error) {
+            console.error("Translation error:", error);
+            toast({
+                title: "Translation Failed",
+                description: "Unable to translate text. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsTranslating(false);
+        }
+    };
+
+    const searchCaseLaw = async () => {
+        if (!caseQuery.trim()) {
+            toast({
+                title: "No Search Query",
+                description: "Please enter a case name or legal concept to search.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsSearching(true);
+        try {
+            const prompt = `Provide information about this legal case or concept: "${caseQuery}"
+
+If it's a case name, provide:
+1. Case citation and year
+2. Court that decided it
+3. Brief summary of facts
+4. The court's holding/decision
+5. Why this case is important/precedential
+6. How it affects ordinary people's rights
+
+If it's a legal concept, provide:
+1. Definition in plain English
+2. When it applies
+3. Important cases that established or refined this concept
+4. Real-world examples
+5. How it affects ordinary people
+
+Format as a structured response with clear sections.`;
+
+            const result = await InvokeLLM({
+                prompt,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        is_case: { type: "boolean" },
+                        title: { type: "string" },
+                        citation: { type: "string" },
+                        court: { type: "string" },
+                        year: { type: "string" },
+                        facts: { type: "string" },
+                        holding: { type: "string" },
+                        significance: { type: "string" },
+                        impact_on_rights: { type: "string" },
+                        related_cases: { 
+                            type: "array",
+                            items: { type: "string" }
+                        }
+                    }
+                }
+            });
+
+            setCaseLawResults([result]);
+            toast({
+                title: "Search Complete",
+                description: "Found information about your legal query."
+            });
+
+        } catch (error) {
+            console.error("Search error:", error);
+            toast({
+                title: "Search Failed",
+                description: "Unable to search case law. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const exampleTexts = [
+        {
+            title: "Court Motion",
+            text: "Plaintiff hereby moves this honorable court for an order compelling defendant to provide complete and adequate responses to plaintiff's first set of interrogatories and requests for production of documents served upon defendant on..."
+        },
+        {
+            title: "Contract Clause",
+            text: "The parties hereto agree that any dispute arising out of or relating to this agreement shall be resolved through binding arbitration in accordance with the rules of the American Arbitration Association..."
+        },
+        {
+            title: "Criminal Statute",
+            text: "Any person who knowingly and willfully makes any materially false, fictitious, or fraudulent statement or representation in any matter within the jurisdiction of the executive, legislative, or judicial branch..."
+        }
+    ];
+
+    const loadExampleText = (text) => {
+        setLegalText(text);
+        setTranslatedText('');
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                            <BookOpen className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">AI "Legalese" Translator & Case Law Guide</h1>
+                            <p className="text-slate-600 mt-1">Make legal language understandable</p>
+                        </div>
+                    </div>
+                </div>
+
+                <Tabs defaultValue="translator" className="space-y-6">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="translator">Legalese Translator</TabsTrigger>
+                        <TabsTrigger value="case-law">Case Law Search</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="translator" className="space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Input Side */}
+                            <div className="space-y-6">
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <FileText className="w-5 h-5 text-blue-600" />
+                                            Legal Text Input
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <Textarea
+                                            placeholder="Paste your legal text here - court documents, contracts, statutes, etc."
+                                            value={legalText}
+                                            onChange={(e) => setLegalText(e.target.value)}
+                                            className="h-64"
+                                        />
+                                        <Button onClick={translateText} disabled={isTranslating} className="w-full">
+                                            {isTranslating ? (
+                                                <>
+                                                    <Clock className="w-4 h-4 mr-2 animate-spin" />
+                                                    Translating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ArrowRight className="w-4 h-4 mr-2" />
+                                                    Translate to Plain English
+                                                </>
+                                            )}
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Example Texts */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-sm">Try These Examples</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-2">
+                                        {exampleTexts.map((example, index) => (
+                                            <Button
+                                                key={index}
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full justify-start text-left"
+                                                onClick={() => loadExampleText(example.text)}
+                                            >
+                                                <div>
+                                                    <div className="font-medium">{example.title}</div>
+                                                    <div className="text-xs text-slate-500 truncate">
+                                                        {example.text.substring(0, 60)}...
+                                                    </div>
+                                                </div>
+                                            </Button>
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Output Side */}
+                            <div>
+                                {translatedText ? (
+                                    <Card className="h-full">
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Scale className="w-5 h-5 text-green-600" />
+                                                Plain English Translation
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-6">
+                                            <div>
+                                                <h4 className="font-semibold mb-3">Translation:</h4>
+                                                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                                    <p className="text-slate-800 leading-relaxed">{translatedText.plain_english}</p>
+                                                </div>
+                                            </div>
+
+                                            {translatedText.key_terms && translatedText.key_terms.length > 0 && (
+                                                <div>
+                                                    <h4 className="font-semibold mb-3">Legal Terms Explained:</h4>
+                                                    <div className="space-y-3">
+                                                        {translatedText.key_terms.map((term, index) => (
+                                                            <div key={index} className="border-l-4 border-blue-500 pl-4">
+                                                                <div className="font-medium text-slate-900">{term.term}</div>
+                                                                <div className="text-sm text-slate-600">{term.definition}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {translatedText.practical_meaning && (
+                                                <div>
+                                                    <h4 className="font-semibold mb-3">What This Means for You:</h4>
+                                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                        <p className="text-slate-800 leading-relaxed">{translatedText.practical_meaning}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                ) : (
+                                    <Card className="h-full">
+                                        <CardContent className="flex items-center justify-center h-64">
+                                            <div className="text-center">
+                                                <BookOpen className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                                <h3 className="text-lg font-semibold text-slate-900 mb-2">Ready to Translate</h3>
+                                                <p className="text-slate-600 text-sm">
+                                                    Paste legal text and click translate to see it in plain English.
+                                                </p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </div>
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="case-law" className="space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Search Side */}
+                            <div className="space-y-6">
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Search className="w-5 h-5 text-purple-600" />
+                                            Case Law & Legal Concept Search
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div>
+                                            <Input
+                                                placeholder="Enter case name (e.g., Miranda v. Arizona) or legal concept (e.g., probable cause)"
+                                                value={caseQuery}
+                                                onChange={(e) => setCaseQuery(e.target.value)}
+                                                onKeyPress={(e) => e.key === 'Enter' && searchCaseLaw()}
+                                            />
+                                        </div>
+                                        <Button onClick={searchCaseLaw} disabled={isSearching} className="w-full">
+                                            {isSearching ? (
+                                                <>
+                                                    <Clock className="w-4 h-4 mr-2 animate-spin" />
+                                                    Searching...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Search className="w-4 h-4 mr-2" />
+                                                    Search Case Law
+                                                </>
+                                            )}
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Popular Searches */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-sm">Popular Searches</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-2">
+                                        {[
+                                            "Miranda v. Arizona",
+                                            "Terry v. Ohio", 
+                                            "Probable Cause",
+                                            "Qualified Immunity",
+                                            "Reasonable Suspicion",
+                                            "Fourth Amendment"
+                                        ].map((query, index) => (
+                                            <Button
+                                                key={index}
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setCaseQuery(query)}
+                                                className="mr-2 mb-2"
+                                            >
+                                                {query}
+                                            </Button>
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Results Side */}
+                            <div>
+                                {caseLawResults.length > 0 ? (
+                                    <div className="space-y-6">
+                                        {caseLawResults.map((result, index) => (
+                                            <Card key={index}>
+                                                <CardHeader>
+                                                    <CardTitle className="flex items-center gap-2">
+                                                        <Scale className="w-5 h-5 text-purple-600" />
+                                                        {result.title}
+                                                    </CardTitle>
+                                                    {result.citation && (
+                                                        <div className="flex gap-2">
+                                                            <Badge variant="outline">{result.citation}</Badge>
+                                                            {result.year && <Badge variant="outline">{result.year}</Badge>}
+                                                            {result.court && <Badge variant="outline">{result.court}</Badge>}
+                                                        </div>
+                                                    )}
+                                                </CardHeader>
+                                                <CardContent className="space-y-4">
+                                                    {result.facts && (
+                                                        <div>
+                                                            <h4 className="font-semibold mb-2">Facts:</h4>
+                                                            <p className="text-sm text-slate-700">{result.facts}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {result.holding && (
+                                                        <div>
+                                                            <h4 className="font-semibold mb-2">Court's Decision:</h4>
+                                                            <p className="text-sm text-slate-700">{result.holding}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {result.significance && (
+                                                        <div>
+                                                            <h4 className="font-semibold mb-2">Why It's Important:</h4>
+                                                            <p className="text-sm text-slate-700">{result.significance}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {result.impact_on_rights && (
+                                                        <div>
+                                                            <h4 className="font-semibold mb-2">Impact on Your Rights:</h4>
+                                                            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                                                <p className="text-sm text-slate-800">{result.impact_on_rights}</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {result.related_cases && result.related_cases.length > 0 && (
+                                                        <div>
+                                                            <h4 className="font-semibold mb-2">Related Cases:</h4>
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {result.related_cases.map((case_name, idx) => (
+                                                                    <Badge key={idx} variant="outline" className="text-xs">
+                                                                        {case_name}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <Card className="h-full">
+                                        <CardContent className="flex items-center justify-center h-64">
+                                            <div className="text-center">
+                                                <Search className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                                <h3 className="text-lg font-semibold text-slate-900 mb-2">Ready to Search</h3>
+                                                <p className="text-slate-600 text-sm">
+                                                    Enter a case name or legal concept to get detailed information.
+                                                </p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </div>
+                        </div>
+                    </TabsContent>
+                </Tabs>
+            </div>
+        </div>
+    );
+}

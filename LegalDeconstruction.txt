@@ -1,0 +1,158 @@
+
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Book, Scale, Anchor, Shield, AlertTriangle, Search } from "lucide-react";
+import { InvokeLLM } from "@/integrations/Core";
+import { useToast } from "@/components/ui/use-toast";
+import DisclaimerGate from '../components/legal/DisclaimerGate';
+
+const LegalWordExplorer = () => {
+    const [term, setTerm] = useState('');
+    const [result, setResult] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const { toast } = useToast();
+
+    const handleSearch = async () => {
+        if (!term.trim()) return;
+        setIsLoading(true);
+        setResult(null);
+
+        try {
+            const prompt = `Provide a deep etymological and historical analysis of the legal term "${term}". 
+            Include:
+            1. Its Latin, Greek, or other ancient roots.
+            2. Its historical evolution and how its meaning changed.
+            3. Its modern legal definition.
+            4. Common misunderstandings or alternative interpretations, including those from commercial or maritime law contexts.
+            IMPORTANT: Conclude with a clear disclaimer that this etymological information is for educational purposes and does not grant special legal powers or supersede established definitions in a modern court of law.`;
+
+            const response = await InvokeLLM({ 
+                prompt,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        term: { type: "string" },
+                        etymology: { type: "string" },
+                        historical_evolution: { type: "string" },
+                        modern_definition: { type: "string" },
+                        alternative_interpretations: { type: "string" },
+                        disclaimer: { type: "string" }
+                    }
+                }
+            });
+            setResult(response);
+        } catch (error) {
+            console.error("Error fetching word origin:", error);
+            toast({
+                title: "Analysis Failed",
+                description: "Could not retrieve the analysis for this term. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    return (
+        <Card className="border-0 shadow-lg bg-white">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-3">
+                    <Book className="w-6 h-6 text-purple-600" />
+                    Legal Word Explorer
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-slate-600 mb-4">Explore the historical and etymological roots of legal terminology. Understand where the language of the law comes from.</p>
+                <div className="flex gap-2 mb-4">
+                    <Input 
+                        placeholder="e.g., Person, Court, Mortgage, Execute"
+                        value={term}
+                        onChange={(e) => setTerm(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    />
+                    <Button onClick={handleSearch} disabled={isLoading}>
+                        {isLoading ? "Searching..." : <Search className="w-4 h-4" />}
+                    </Button>
+                </div>
+                {result && (
+                    <div className="space-y-4 mt-6">
+                        <h3 className="text-xl font-bold">{result.term}</h3>
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Etymology & Roots</h4>
+                            <p className="text-sm text-slate-700">{result.etymology}</p>
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Historical Evolution</h4>
+                            <p className="text-sm text-slate-700">{result.historical_evolution}</p>
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Modern Legal Definition</h4>
+                            <p className="text-sm text-slate-700">{result.modern_definition}</p>
+                        </div>
+                         <div>
+                            <h4 className="font-semibold text-slate-800">Contextual Interpretations</h4>
+                            <p className="text-sm text-slate-700">{result.alternative_interpretations}</p>
+                        </div>
+                        <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Educational Use Only</AlertTitle>
+                            <AlertDescription>{result.disclaimer}</AlertDescription>
+                        </Alert>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
+export default function LegalDeconstruction() {
+    return (
+        <DisclaimerGate>
+            <div className="p-6 space-y-8">
+                <div className="max-w-7xl mx-auto">
+                    {/* Header */}
+                    <div className="mb-8">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 bg-gradient-to-br from-slate-600 to-slate-800 rounded-xl flex items-center justify-center">
+                                <Scale className="w-7 h-7 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold text-slate-900">Legal Deconstruction & Theory</h1>
+                                <p className="text-slate-600 mt-1">Explore the foundational concepts and historical origins of our legal system.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <LegalWordExplorer />
+
+                        <Card className="border-0 shadow-lg bg-white">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-3">
+                                    <Anchor className="w-6 h-6 text-blue-600" />
+                                    Guide to Jurisdictional Concepts
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                               <p className="text-slate-600 mb-4">Understand the critical differences between various types of law and jurisdiction. This guide clarifies complex concepts often discussed in alternative legal theories.</p>
+                                
+                                <div>
+                                    <h4 className="font-semibold text-slate-800 flex items-center gap-2"><Shield className="w-4 h-4"/>Common Law vs. Statutory Law</h4>
+                                    <p className="text-sm text-slate-700 border-l-2 pl-4 ml-2">Common Law is derived from judicial decisions and precedent, while Statutory Law is written law passed by legislative bodies. Modern courts apply a combination of both.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-slate-800 flex items-center gap-2"><Scale className="w-4 h-4"/>Understanding Jurisdiction</h4>
+                                    <p className="text-sm text-slate-700 border-l-2 pl-4 ml-2">For a court to hear a case, it must have both "Personal Jurisdiction" (power over the people involved) and "Subject-Matter Jurisdiction" (power over the type of case). These are established by constitutions and statutes, not by maritime flags or other symbols.</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            </div>
+        </DisclaimerGate>
+    );
+}

@@ -1,0 +1,93 @@
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Scale, BrainCircuit, Search, FileSignature, Mic, ShieldCheck } from 'lucide-react';
+import AICaseStrategist from '../components/self-litigant/AICaseStrategist';
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import SubscriptionGate from '../components/subscription/SubscriptionGate';
+
+const DigitalPI = () => (
+    <Card className="border-0 shadow-lg bg-white">
+        <CardHeader>
+            <CardTitle className="flex items-center gap-3"><Search className="w-6 h-6 text-slate-700" /> Digital Private Investigator</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <p className="text-slate-600 mb-4">Uncover crucial information. Conduct public records searches, find potential witnesses, draft FOIA requests, and archive web evidence.</p>
+            <Link to={createPageUrl("DigitalInvestigator")}>
+                <Button variant="outline" className="w-full">Access Investigation Tools</Button>
+            </Link>
+        </CardContent>
+    </Card>
+);
+
+const AILegalDraftsman = () => (
+    <SubscriptionGate feature="document_generation">
+        <Card className="border-0 shadow-lg bg-white">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-3"><FileSignature className="w-6 h-6 text-blue-600" /> AI Legal Draftsman</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-slate-600 mb-4">Generate and draft court-ready documents. Use interactive motion builders and let the AI help you weave your evidence into persuasive legal arguments.</p>
+                <Link to={createPageUrl("LegalDraftsman")}>
+                    <Button className="bg-blue-600 hover:bg-blue-700 w-full">Draft a New Document</Button>
+                </Link>
+            </CardContent>
+        </Card>
+    </SubscriptionGate>
+);
+
+const CourtroomSimulator = () => (
+    <SubscriptionGate feature="courtroom_simulator">
+        <Card className="border-0 shadow-lg bg-white">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-3"><Mic className="w-6 h-6 text-red-600" /> Courtroom Simulator</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-slate-600 mb-4">Prepare for battle. Practice your cross-examination against a tough AI, get coaching on your opening/closing statements, and plan your evidence presentation.</p>
+                <Link to={createPageUrl("CourtroomSimulator")}>
+                    <Button className="bg-red-600 hover:bg-red-700 w-full">Start Simulation</Button>
+                </Link>
+            </CardContent>
+        </Card>
+    </SubscriptionGate>
+);
+
+export default function SelfLitigantCenter() {
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-amber-600 to-slate-800 rounded-xl flex items-center justify-center">
+                            <Scale className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Self-Litigant Command Center</h1>
+                            <p className="text-slate-600 mt-1">Your comprehensive toolkit for navigating the justice system.</p>
+                        </div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <h2 className="font-semibold text-amber-900 mb-2 flex items-center gap-2"><ShieldCheck className="w-5 h-5"/> A Note on Practice</h2>
+                        <p className="text-amber-800 text-sm leading-relaxed">
+                            This platform provides powerful tools for legal information, strategy, and documentation. It is not a substitute for legal advice from a qualified attorney. Always consult local laws and court rules.
+                        </p>
+                    </div>
+                </div>
+
+                {/* Core Modules Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <SubscriptionGate feature="case_strategy">
+                        <AICaseStrategist />
+                    </SubscriptionGate>
+                    <div className="space-y-8">
+                        <AILegalDraftsman />
+                        <CourtroomSimulator />
+                        <DigitalPI />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

@@ -1,0 +1,422 @@
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Shield, CheckCircle, AlertTriangle, FileText, Scale, Clock } from "lucide-react";
+
+export default function FalseImprisonmentGuide() {
+    const [checklist, setChecklist] = useState({
+        unlawful_restraint: false,
+        lack_of_consent: false,
+        against_will: false,
+        no_legal_justification: false,
+        physical_confinement: false,
+        threats_of_force: false,
+        duration_significant: false,
+        damages_suffered: false
+    });
+
+    const [prosecutionChecklist, setProsecutionChecklist] = useState({
+        charges_filed: false,
+        lacking_probable_cause: false,
+        false_evidence: false,
+        continued_after_evidence: false,
+        malicious_intent: false,
+        favorable_termination: false,
+        damages_from_prosecution: false
+    });
+
+    const handleChecklistChange = (key, value) => {
+        setChecklist(prev => ({ ...prev, [key]: value }));
+    };
+
+    const handleProsecutionChecklistChange = (key, value) => {
+        setProsecutionChecklist(prev => ({ ...prev, [key]: value }));
+    };
+
+    const imprisonmentScore = Object.values(checklist).filter(Boolean).length;
+    const prosecutionScore = Object.values(prosecutionChecklist).filter(Boolean).length;
+
+    const getScoreColor = (score, total) => {
+        const percentage = (score / total) * 100;
+        if (percentage >= 75) return "text-red-600";
+        if (percentage >= 50) return "text-orange-600";
+        if (percentage >= 25) return "text-yellow-600";
+        return "text-slate-600";
+    };
+
+    const LegalElements = ({ title, elements }) => (
+        <Card>
+            <CardHeader>
+                <CardTitle>{title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-4">
+                    {elements.map((element, index) => (
+                        <div key={index} className="border-l-4 border-blue-500 pl-4">
+                            <h4 className="font-semibold text-slate-900">{element.element}</h4>
+                            <p className="text-sm text-slate-600 mt-1">{element.explanation}</p>
+                            {element.examples && (
+                                <div className="mt-2">
+                                    <span className="text-xs font-medium text-slate-700">Examples: </span>
+                                    <span className="text-xs text-slate-600">{element.examples}</span>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+
+    const falseImprisonmentElements = [
+        {
+            element: "1. Unlawful Restraint",
+            explanation: "The defendant confined or restrained the plaintiff's movement without legal authority.",
+            examples: "Holding someone against their will, blocking exits, physical restraints"
+        },
+        {
+            element: "2. Intent",
+            explanation: "The defendant acted intentionally or knew their actions would cause confinement.",
+            examples: "Deliberately locking someone in, intentionally blocking their path"
+        },
+        {
+            element: "3. Without Consent",
+            explanation: "The confinement occurred without the plaintiff's consent or against their will.",
+            examples: "Person tried to leave but was prevented, explicitly said they wanted to go"
+        },
+        {
+            element: "4. No Legal Justification",
+            explanation: "The defendant had no legal right or authority to confine the plaintiff.",
+            examples: "No warrant, no citizen's arrest authority, beyond scope of legal detention"
+        }
+    ];
+
+    const maliciousProsecutionElements = [
+        {
+            element: "1. Institution of Criminal Proceedings",
+            explanation: "The defendant initiated or continued criminal proceedings against the plaintiff.",
+            examples: "Filing charges, continuing prosecution, presenting case to grand jury"
+        },
+        {
+            element: "2. Lack of Probable Cause",
+            explanation: "The proceedings were initiated without probable cause to believe plaintiff committed a crime.",
+            examples: "Insufficient evidence, contradictory evidence, fabricated evidence"
+        },
+        {
+            element: "3. Malice",
+            explanation: "The defendant acted with malice or for an improper purpose.",
+            examples: "Personal vendetta, political motivation, covering up own misconduct"
+        },
+        {
+            element: "4. Favorable Termination",
+            explanation: "The criminal proceedings terminated in favor of the plaintiff.",
+            examples: "Charges dismissed, not guilty verdict, prosecutor dropped charges"
+        }
+    ];
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center">
+                            <Shield className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">False Imprisonment & Malicious Prosecution Guide</h1>
+                            <p className="text-slate-600 mt-1">Understand your rights and build your case</p>
+                        </div>
+                    </div>
+
+                    <Alert className="bg-red-50 border-red-200">
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                        <AlertTitle className="text-red-900">Serious Constitutional Violations</AlertTitle>
+                        <AlertDescription className="text-red-800">
+                            False imprisonment and malicious prosecution are serious torts that violate your fundamental rights to liberty and due process. This guide helps you understand if you have a valid claim.
+                        </AlertDescription>
+                    </Alert>
+                </div>
+
+                <Tabs defaultValue="false-imprisonment" className="space-y-6">
+                    <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="false-imprisonment">False Imprisonment</TabsTrigger>
+                        <TabsTrigger value="malicious-prosecution">Malicious Prosecution</TabsTrigger>
+                        <TabsTrigger value="interactive-checklist">Case Analysis</TabsTrigger>
+                        <TabsTrigger value="legal-elements">Legal Elements</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="false-imprisonment" className="space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>What is False Imprisonment?</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-slate-700">
+                                    False imprisonment occurs when someone intentionally restricts your freedom of movement without legal justification. This can happen through physical barriers, threats, or assertions of authority.
+                                </p>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <h4 className="font-semibold text-slate-900 mb-3">Common Examples:</h4>
+                                        <ul className="space-y-2 text-sm">
+                                            <li className="flex items-start gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                                                <span>Police detaining you without reasonable suspicion</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                                                <span>Security guards holding you without cause</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                                                <span>Being locked in a room against your will</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                                                <span>Prolonged traffic stops without justification</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="font-semibold text-slate-900 mb-3">Key Requirements:</h4>
+                                        <ul className="space-y-2 text-sm">
+                                            <li className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                                <span>Intentional confinement or restraint</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                                <span>Without consent or legal justification</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                                <span>Plaintiff was aware of the confinement</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                                <span>Some form of damages resulted</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="malicious-prosecution" className="space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>What is Malicious Prosecution?</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-slate-700">
+                                    Malicious prosecution occurs when someone initiates criminal proceedings against you without probable cause and with malicious intent, and those proceedings ultimately terminate in your favor.
+                                </p>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <h4 className="font-semibold text-slate-900 mb-3">Common Scenarios:</h4>
+                                        <ul className="space-y-2 text-sm">
+                                            <li className="flex items-start gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                                                <span>Prosecutors filing charges they know are baseless</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                                                <span>Continuing prosecution after evidence proves innocence</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                                                <span>Using fabricated or suppressed evidence</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                                                <span>Personal vendetta driving prosecution</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="font-semibold text-slate-900 mb-3">Damages You Can Recover:</h4>
+                                        <ul className="space-y-2 text-sm">
+                                            <li className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                                <span>Attorney fees and legal costs</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                                <span>Lost wages and employment opportunities</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                                <span>Emotional distress and mental anguish</span>
+                                            </li>
+                                            <li className="flex items-start gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                                <span>Punitive damages for egregious conduct</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="interactive-checklist" className="space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* False Imprisonment Checklist */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Shield className="w-5 h-5 text-red-600" />
+                                        False Imprisonment Analysis
+                                    </CardTitle>
+                                    <p className="text-sm text-slate-600">Check all that apply to your situation</p>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-3">
+                                        {Object.entries({
+                                            unlawful_restraint: "I was physically restrained or confined",
+                                            lack_of_consent: "This happened without my consent",
+                                            against_will: "I tried to leave but was prevented",
+                                            no_legal_justification: "They had no legal right to detain me",
+                                            physical_confinement: "I was physically unable to leave",
+                                            threats_of_force: "Threats were used to keep me there",
+                                            duration_significant: "The detention lasted a significant time",
+                                            damages_suffered: "I suffered damages from this detention"
+                                        }).map(([key, label]) => (
+                                            <div key={key} className="flex items-center space-x-2">
+                                                <Checkbox 
+                                                    id={key}
+                                                    checked={checklist[key]}
+                                                    onCheckedChange={(checked) => handleChecklistChange(key, checked)}
+                                                />
+                                                <label htmlFor={key} className="text-sm">{label}</label>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="mt-6 p-4 bg-slate-50 rounded-lg">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="font-medium">Case Strength:</span>
+                                            <Badge className={`${getScoreColor(imprisonmentScore, 8)} bg-transparent border`}>
+                                                {imprisonmentScore}/8 Elements
+                                            </Badge>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div 
+                                                className="bg-red-600 h-2 rounded-full transition-all duration-300" 
+                                                style={{ width: `${(imprisonmentScore / 8) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                        <p className="text-xs text-slate-600 mt-2">
+                                            {imprisonmentScore >= 6 ? "Strong case - consult an attorney" :
+                                             imprisonmentScore >= 4 ? "Moderate case - gather more evidence" :
+                                             imprisonmentScore >= 2 ? "Weak case - may not meet legal standards" :
+                                             "Insufficient evidence for a viable claim"}
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Malicious Prosecution Checklist */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Scale className="w-5 h-5 text-orange-600" />
+                                        Malicious Prosecution Analysis
+                                    </CardTitle>
+                                    <p className="text-sm text-slate-600">Check all that apply to your situation</p>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-3">
+                                        {Object.entries({
+                                            charges_filed: "Criminal charges were filed against me",
+                                            lacking_probable_cause: "There was no probable cause for the charges",
+                                            false_evidence: "False or fabricated evidence was used",
+                                            continued_after_evidence: "Prosecution continued despite exonerating evidence",
+                                            malicious_intent: "The prosecutor had malicious or improper motives",
+                                            favorable_termination: "The case ended in my favor (dismissed, acquitted, etc.)",
+                                            damages_from_prosecution: "I suffered damages from the prosecution"
+                                        }).map(([key, label]) => (
+                                            <div key={key} className="flex items-center space-x-2">
+                                                <Checkbox 
+                                                    id={key}
+                                                    checked={prosecutionChecklist[key]}
+                                                    onCheckedChange={(checked) => handleProsecutionChecklistChange(key, checked)}
+                                                />
+                                                <label htmlFor={key} className="text-sm">{label}</label>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="mt-6 p-4 bg-slate-50 rounded-lg">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="font-medium">Case Strength:</span>
+                                            <Badge className={`${getScoreColor(prosecutionScore, 7)} bg-transparent border`}>
+                                                {prosecutionScore}/7 Elements
+                                            </Badge>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div 
+                                                className="bg-orange-600 h-2 rounded-full transition-all duration-300" 
+                                                style={{ width: `${(prosecutionScore / 7) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                        <p className="text-xs text-slate-600 mt-2">
+                                            {prosecutionScore >= 5 ? "Strong case - consult an attorney immediately" :
+                                             prosecutionScore >= 3 ? "Moderate case - gather more documentation" :
+                                             prosecutionScore >= 2 ? "Weak case - may face immunity defenses" :
+                                             "Insufficient evidence for a viable claim"}
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="legal-elements" className="space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <LegalElements title="False Imprisonment Elements" elements={falseImprisonmentElements} />
+                            <LegalElements title="Malicious Prosecution Elements" elements={maliciousProsecutionElements} />
+                        </div>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Important Legal Considerations</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <h4 className="font-semibold mb-3">Statute of Limitations</h4>
+                                        <ul className="text-sm space-y-1 list-disc list-inside text-slate-600">
+                                            <li>Typically 1-3 years from the incident</li>
+                                            <li>Varies by state and type of claim</li>
+                                            <li>Discovery rule may extend deadline</li>
+                                            <li>Consult attorney immediately if close to deadline</li>
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-semibold mb-3">Immunity Defenses</h4>
+                                        <ul className="text-sm space-y-1 list-disc list-inside text-slate-600">
+                                            <li>Qualified immunity for government officials</li>
+                                            <li>Prosecutorial immunity (limited exceptions)</li>
+                                            <li>Good faith defense for law enforcement</li>
+                                            <li>These can be overcome with strong evidence</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+            </div>
+        </div>
+    );
+}

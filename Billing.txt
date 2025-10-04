@@ -1,0 +1,221 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { User } from "@/entities/User";
+import { ExternalLink, Loader2, CreditCard, CheckCircle, AlertTriangle, Crown, Zap, Shield, Sparkles } from "lucide-react";
+import { useLocation } from 'react-router-dom';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { createCheckoutSession } from '@/functions/createCheckoutSession';
+import { createStripePortalSession } from '@/functions/createStripePortalSession';
+import { useToast } from "@/components/ui/use-toast";
+
+const plans = [
+    {
+        name: "Free",
+        tier: "free",
+        price: "$0",
+        period: "/ month",
+        description: "For individuals needing basic tools to document and understand their rights.",
+        features: [
+            "Incident Reporting",
+            "Rights Education Guides",
+            "5 AI Operations/month",
+            "Community Forum Access"
+        ],
+        icon: Shield
+    },
+    {
+        name: "Justice Seeker",
+        tier: "basic",
+        price: "$29",
+        period: "/ month",
+        description: "For those actively building a case and needing robust AI assistance.",
+        features: [
+            "Everything in Free, plus:",
+            "100 AI Operations/month",
+            "AI Document Analysis",
+            "AI Case Strategist",
+            "Legal Document Generation",
+            "Standard Audio Transcription"
+        ],
+        icon: Zap,
+        highlight: true
+    },
+    {
+        name: "Advocate",
+        tier: "premium",
+        price: "$79",
+        period: "/ month",
+        description: "For complex cases requiring advanced investigative and analytical power.",
+        features: [
+            "Everything in Basic, plus:",
+            "500 AI Operations/month",
+            "Full Investigative Suite",
+            "Advanced Audio Forensics",
+            "Priority Support",
+            "Early Access to New Features"
+        ],
+        icon: Crown
+    }
+];
+
+export default function Billing() {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [isCreatingSession, setIsCreatingSession] = useState(false);
+    const [error, setError] = useState(null);
+    const location = useLocation();
+    const { toast } = useToast();
+
+    useEffect(() => {
+        const fetchUserData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const userData = await User.me();
+                setUser(userData);
+
+                const query = new URLSearchParams(location.search);
+                if (query.get("success")) {
+                    toast({
+                        title: "Subscription Activated!",
+                        description: "Thank you for upgrading. Your new features are now available.",
+                        variant: "success",
+                    });
+                }
+                if (query.get("canceled")) {
+                     toast({
+                        title: "Checkout Canceled",
+                        description: "You can complete your subscription at any time.",
+                        variant: "warning",
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to load user data:", err);
+                setError("Failed to load your user information. Please refresh the page.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchUserData();
+    }, [location.search, toast]);
+
+    const handleSubscribe = async (tier) => {
+        setIsCreatingSession(true);
+        try {
+            const response = await createCheckoutSession({ tier });
+            if (response.data && response.data.url) {
+                window.location.href = response.data.url;
+            } else {
+                throw new Error(response.data?.error || "Could not create a checkout session.");
+            }
+        } catch (err) {
+            console.error("Stripe session creation failed:", err);
+            toast({
+                title: "Subscription Error",
+                description: err.message || "Could not connect to the payment processor. Please try again.",
+                variant: "destructive",
+            });
+            setIsCreatingSession(false);
+        }
+    };
+
+    const handleManageSubscription = async () => {
+        setIsCreatingSession(true);
+        try {
+            const response = await createStripePortalSession();
+            if (response.data && response.data.url) {
+                window.location.href = response.data.url;
+            } else {
+                throw new Error(response.data?.error || "Could not open the customer portal.");
+            }
+        } catch (err) {
+            console.error("Stripe portal session failed:", err);
+            toast({
+                title: "Management Error",
+                description: err.message || "Could not open your subscription portal. Please contact support.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsCreatingSession(false);
+        }
+    };
+
+    if (loading) {
+        return <div className="p-6 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto" /></div>;
+    }
+
+    const currentTier = user?.subscription_tier || 'free';
+
+    return (
+        <div className="p-6 bg-slate-50 min-h-screen">
+            <div className="max-w-7xl mx-auto space-y-8">
+                <div className="text-center">
+                    <Sparkles className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+                    <h1 className="text-4xl font-bold text-slate-900">Choose Your Plan</h1>
+                    <p className="text-slate-600 mt-2 max-w-2xl mx-auto">Unlock the full potential of Due Process AI and get the tools you need to build a strong case.</p>
+                </div>
+                
+                <Alert className="border-amber-200 bg-amber-50">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertTitle className="text-amber-900">Backend Functions May Be Disabled</AlertTitle>
+                    <AlertDescription className="text-amber-800">
+                        For payment processing to work, the app owner must have an active base44 platform subscription that enables backend functions.
+                    </AlertDescription>
+                </Alert>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+                    {plans.map((plan) => {
+                        const PlanIcon = plan.icon;
+                        const isCurrentPlan = plan.tier === currentTier;
+                        return (
+                            <Card key={plan.name} className={`flex flex-col ${plan.highlight ? 'border-2 border-amber-500 shadow-xl' : 'shadow-lg'}`}>
+                                <CardHeader className="text-center">
+                                    <div className="flex justify-center items-center gap-2">
+                                        <PlanIcon className={`w-6 h-6 ${plan.highlight ? 'text-amber-500' : 'text-slate-600'}`} />
+                                        <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                                    </div>
+                                    <CardDescription>{plan.description}</CardDescription>
+                                </CardHeader>
+                                <CardContent className="flex-grow flex flex-col justify-between">
+                                    <div>
+                                        <div className="text-center mb-6">
+                                            <span className="text-4xl font-bold">{plan.price}</span>
+                                            <span className="text-slate-500">{plan.period}</span>
+                                        </div>
+                                        <ul className="space-y-3 text-sm mb-8">
+                                            {plan.features.map((feature, i) => (
+                                                <li key={i} className="flex items-center gap-3">
+                                                    <CheckCircle className="w-5 h-5 text-green-500" />
+                                                    <span className="text-slate-700">{feature}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    <div className="mt-auto">
+                                        {isCurrentPlan ? (
+                                            currentTier !== 'free' ? (
+                                                 <Button onClick={handleManageSubscription} disabled={isCreatingSession} className="w-full">
+                                                    {isCreatingSession ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                                    Manage Subscription
+                                                </Button>
+                                            ) : (
+                                                <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                                            )
+                                        ) : plan.tier !== 'free' ? (
+                                            <Button onClick={() => handleSubscribe(plan.tier)} disabled={isCreatingSession} className={`w-full ${plan.highlight ? 'bg-amber-600 hover:bg-amber-700' : ''}`}>
+                                                {isCreatingSession ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                                Upgrade to {plan.name}
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}

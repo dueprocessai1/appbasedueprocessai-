@@ -1,0 +1,747 @@
+
+import React, { useState, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { 
+    AudioLines, 
+    Upload, 
+    Play, 
+    Pause, 
+    Download, 
+    Loader2, 
+    FileAudio, 
+    Users, 
+    Clock,
+    Shield,
+    Volume2,
+    Zap,
+    AlertTriangle,
+    ExternalLink,
+    Crown,
+    DollarSign,
+    Globe // Added Globe icon for language
+} from "lucide-react";
+import { UploadFile } from "@/integrations/Core";
+import { analyzeAudio } from "@/functions/analyzeAudio";
+import { useToast } from "@/components/ui/use-toast";
+import SubscriptionGate from '../components/subscription/SubscriptionGate';
+
+const SUPPORTED_FORMATS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.mp4'];
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // Increased to 50MB as requested
+const RECOMMENDED_SIZE = 10 * 1024 * 1024; // 10MB recommended size
+
+export default function AudioForensicLab() {
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [processingProgress, setProcessingProgress] = useState(0);
+    const [audioUrl, setAudioUrl] = useState(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [transcriptionResult, setTranscriptionResult] = useState(null);
+    const [caseNotes, setCaseNotes] = useState('');
+    const [caseContext, setCaseContext] = useState('');
+    const [functionError, setFunctionError] = useState(null);
+    const audioRef = useRef(null);
+    const fileInputRef = useRef(null);
+    const { toast } = useToast();
+
+    const handleFileSelect = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Validate file type
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        if (!SUPPORTED_FORMATS.includes(fileExtension)) {
+            toast({
+                title: "Unsupported Format",
+                description: `Please select one of these formats: ${SUPPORTED_FORMATS.join(', ')}`,
+                variant: "destructive"
+            });
+            return;
+        }
+
+        // Enhanced file size validation with better messaging
+        if (file.size > MAX_FILE_SIZE) {
+            const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+            const maxSizeMB = (MAX_FILE_SIZE / 1024 / 1024).toFixed(0);
+            toast({
+                title: "File Too Large",
+                description: `File is ${sizeMB}MB. Maximum size is ${maxSizeMB}MB to avoid upload timeouts. Please compress or trim your audio file.`,
+                variant: "destructive",
+                duration: 8000
+            });
+            return;
+        }
+
+        // Warning for large files that might be slow
+        if (file.size > RECOMMENDED_SIZE) {
+            const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+            toast({
+                title: "Large File Warning",
+                description: `File is ${sizeMB}MB. Processing may take several minutes. Consider compressing for faster results.`,
+                variant: "default",
+                duration: 6000
+            });
+        }
+
+        setSelectedFile(file);
+        setAudioUrl(URL.createObjectURL(file));
+        setTranscriptionResult(null);
+        setFunctionError(null);
+    };
+
+    const handleUploadAndProcess = async () => {
+        if (!selectedFile) {
+            toast({
+                title: "No File Selected",
+                description: "Please select an audio file first.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        try {
+            // Step 1: Upload file with enhanced error handling
+            setIsUploading(true);
+            setUploadProgress(25);
+            setFunctionError(null);
+            
+            toast({
+                title: "Uploading Audio",
+                description: "Securely uploading your audio file...",
+            });
+
+            let uploadResult;
+            try {
+                uploadResult = await UploadFile({ file: selectedFile });
+                setUploadProgress(100);
+                setIsUploading(false);
+            } catch (uploadError) {
+                console.error("Upload error:", uploadError);
+                
+                // Handle specific upload errors
+                const errorMessage = uploadError.message || '';
+                const errorStatus = uploadError.response?.status;
+                
+                if (errorStatus === 544 || errorMessage.includes('DatabaseTimeout') || errorMessage.includes('timeout')) {
+                    setFunctionError({
+                        type: 'upload_timeout',
+                        title: 'Upload Timeout',
+                        message: `File upload timed out. File size: ${(selectedFile.size / 1024 / 1024).toFixed(1)}MB`,
+                        solution: 'Try compressing your audio file to under 10MB, or split longer recordings into smaller segments. You can use free tools like Audacity or online audio compressors.'
+                    });
+                } else if (errorStatus === 413 || errorMessage.includes('too large')) {
+                    setFunctionError({
+                        type: 'file_too_large',
+                        title: 'File Too Large',
+                        message: 'The audio file exceeds the platform upload limit.',
+                        solution: 'Compress your audio file or split it into smaller segments before uploading.'
+                    });
+                } else if (errorMessage.includes('Network')) {
+                    setFunctionError({
+                        type: 'network',
+                        title: 'Network Error',
+                        message: 'Network connection failed during upload.',
+                        solution: 'Check your internet connection and try again. For large files, ensure you have a stable connection.'
+                    });
+                } else {
+                    setFunctionError({
+                        type: 'upload_error',
+                        title: 'Upload Failed',
+                        message: errorMessage || 'Unknown upload error occurred.',
+                        solution: 'Please try again with a smaller file, or contact support if the issue persists.'
+                    });
+                }
+
+                toast({
+                    title: "Upload Failed",
+                    description: "Audio file upload failed. See error details below.",
+                    variant: "destructive"
+                });
+                setIsUploading(false);
+                setUploadProgress(0);
+                return;
+            }
+
+            // Step 2: Process with AI (only if upload succeeded)
+            setIsProcessing(true);
+            setProcessingProgress(25);
+
+            toast({
+                title: "Processing Audio",
+                description: "AI is transcribing your audio with high precision...",
+            });
+
+            setProcessingProgress(50);
+
+            const { data: analysisResult } = await analyzeAudio({
+                file_url: uploadResult.file_url,
+                file_name: selectedFile.name,
+                case_context: caseContext || 'Audio evidence for investigation',
+                user_notes: caseNotes || ''
+            });
+
+            setProcessingProgress(75);
+
+            if (analysisResult.success) {
+                setTranscriptionResult(analysisResult);
+                setProcessingProgress(100);
+                
+                // Check if analysis was partial due to rate limits
+                if (analysisResult.metadata?.analysis_status === 'transcription_only') {
+                    toast({
+                        title: "Transcription Complete",
+                        description: "Audio transcribed successfully. Analysis was unavailable, but you can review the full text.",
+                        variant: "warning",
+                        duration: 7000,
+                    });
+                } else {
+                    toast({
+                        title: "Analysis Complete",
+                        description: `Successfully processed ${selectedFile.name}`,
+                    });
+                }
+            } else {
+                // This 'else' block will now mostly catch unhandled server errors
+                throw new Error(analysisResult.error || "An unknown processing failure occurred.");
+            }
+
+        } catch (error) {
+            console.error("Processing error:", error);
+            
+            const errorMessage = error.message || '';
+            const errorStatus = error.response?.status;
+            const errorData = error.response?.data || {};
+            const errorDetail = errorData.error || errorData.details || '';
+            const errorText = (errorDetail || errorMessage).toLowerCase();
+            
+            if (errorText.includes('functions are blocked') || errorText.includes('subscription tier is too low')) {
+                setFunctionError({
+                    type: 'subscription',
+                    title: 'Platform Subscription Required',
+                    message: "This feature requires backend functions, which are disabled on the current Base44 platform plan.",
+                    solution: "The app owner must upgrade their Base44 platform subscription to a plan that includes backend function support to enable this AI feature."
+                });
+            } else if (errorStatus === 429 || errorText.includes('quota exceeded') || errorText.includes('rate limit')) {
+                setFunctionError({
+                    type: 'quota',
+                    title: 'API Quota/Rate Limit Exceeded',
+                    message: `The AI service has reached its rate limit. ${errorData.details || ''}`,
+                    solution: "Please wait a few minutes and try again, or check if the relevant AI provider account (OpenAI or Anthropic) needs additional credits.",
+                    retryAfter: errorData.retry_after || 60
+                });
+            } else if (errorStatus === 402 || errorText.includes('billing') || errorText.includes('insufficient credits')) {
+                setFunctionError({
+                    type: 'billing',
+                    title: 'AI Provider Billing Issue',
+                    message: `A billing issue was detected. ${errorData.details || ''}`,
+                    solution: "Your OpenAI or Anthropic account may require payment or have insufficient credits. Please check your billing settings with the respective provider."
+                });
+            } else if (errorStatus === 401 || errorText.includes('unauthorized') || errorText.includes('incorrect api key')) {
+                setFunctionError({
+                    type: 'auth',
+                    title: 'Authentication Error',
+                    message: 'Authentication with an AI service failed.',
+                    solution: 'Please ensure the OpenAI and Anthropic API keys are correct and valid in the app settings.'
+                });
+            } else if (errorStatus >= 500) {
+                setFunctionError({
+                    type: 'server',
+                    title: 'Service Unavailable',
+                    message: 'The AI transcription or analysis service is temporarily unavailable.',
+                    solution: 'This may be due to an internal server issue or problems with the OpenAI/Anthropic services. Please try again later.'
+                });
+            } else if (errorText.includes('network error') || errorText.includes('network')) {
+                setFunctionError({
+                    type: 'network',
+                    title: 'Connection Error',
+                    message: 'Network connection failed.',
+                    solution: 'Please check your internet connection and try again.'
+                });
+            } else {
+                setFunctionError({
+                    type: 'unknown',
+                    title: 'Processing Error',
+                    message: errorDetail || errorMessage || 'An unexpected error occurred.',
+                    solution: 'Please try again or contact support if the issue persists.'
+                });
+            }
+            
+            toast({
+                title: "Processing Failed",
+                description: "Unable to process audio. See error details below.",
+                variant: "destructive"
+            });
+        } finally {
+            // These are always reset at the end of the entire process
+            setIsUploading(false);
+            setIsProcessing(false);
+            setProcessingProgress(0);
+            setUploadProgress(0);
+        }
+    };
+
+    const togglePlayPause = () => {
+        if (!audioRef.current) return;
+        
+        if (isPlaying) {
+            audioRef.current.pause();
+        } else {
+            audioRef.current.play();
+        }
+        setIsPlaying(!isPlaying);
+    };
+
+    const downloadTranscript = () => {
+        if (!transcriptionResult?.transcript?.full_text) return;
+
+        const timestamp = new Date().toISOString().split('T')[0];
+        const filename = `transcript_${selectedFile?.name || 'audio'}_${timestamp}.txt`;
+        
+        let content = `AUDIO FORENSIC TRANSCRIPT\n`;
+        content += `Generated: ${new Date().toLocaleString()}\n`;
+        content += `Source File: ${selectedFile?.name || 'Unknown'}\n`;
+        content += `Duration: ${transcriptionResult.transcript.duration ? Math.round(transcriptionResult.transcript.duration) + ' seconds' : 'Unknown'}\n`;
+        content += `Language: ${transcriptionResult.transcript.language || 'Unknown'}\n`;
+        if (transcriptionResult.transcript.speaker_count) {
+            content += `Detected Speakers: ${transcriptionResult.transcript.speaker_count}\n`;
+        }
+        content += `\n${'='.repeat(50)}\n\n`;
+        content += `FULL TRANSCRIPT:\n${transcriptionResult.transcript.full_text}\n\n`;
+        
+        if (transcriptionResult.analysis) {
+            content += `AI ANALYSIS (Powered by ${transcriptionResult.metadata.analysis_model || 'Claude 3'}):\n`;
+            content += `${'='.repeat(50)}\n`;
+            content += `${transcriptionResult.analysis.summary}\n\n`;
+        }
+
+        if (transcriptionResult.transcript.segments && transcriptionResult.transcript.segments.length > 0) {
+            content += `TIMESTAMPED SEGMENTS:\n`;
+            content += `${'='.repeat(50)}\n`;
+            transcriptionResult.transcript.segments.forEach((segment, index) => {
+                const startTime = segment.start ? `${Math.floor(segment.start / 60)}:${(segment.start % 60).toFixed(1).padStart(4, '0')}` : 'Unknown';
+                const endTime = segment.end ? `${Math.floor(segment.end / 60)}:${(segment.end % 60).toFixed(1).padStart(4, '0')}` : 'Unknown';
+                const speakerLabel = segment.speaker ? `Speaker ${segment.speaker}: ` : '';
+                content += `[${startTime} - ${endTime}] ${speakerLabel}${segment.text || 'No text'}\n`;
+            });
+        }
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        toast({
+            title: "Transcript Downloaded",
+            description: `Saved as ${filename}`,
+        });
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl flex items-center justify-center">
+                            <AudioLines className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Audio Forensic Lab</h1>
+                            <p className="text-slate-600 mt-1">High-precision transcription and analysis for audio evidence</p>
+                        </div>
+                    </div>
+                    
+                    <Alert className="bg-purple-50 border-purple-200">
+                        <Shield className="h-5 w-5 text-purple-600" />
+                        <AlertTitle className="text-purple-900">Professional Audio Processing</AlertTitle>
+                        <AlertDescription className="text-purple-800">
+                            This tool uses state-of-the-art AI to transcribe conversations, meetings, and calls with legal-grade accuracy. 
+                            <br /><strong>File Size Limits:</strong> Maximum {(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB, recommended under {(RECOMMENDED_SIZE / 1024 / 1024).toFixed(0)}MB for optimal performance.
+                        </AlertDescription>
+                    </Alert>
+                </div>
+
+                {/* Backend Function Error Alert */}
+                {functionError && (
+                    <Alert variant="destructive" className="mb-8 bg-red-50 border-red-200">
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
+                        <AlertTitle className="text-red-900 font-bold">{functionError.title}</AlertTitle>
+                        <AlertDescription className="mt-2 text-red-800">
+                            <p className="mb-3">{functionError.message}</p>
+                            <p className="mb-4 text-sm font-medium">{functionError.solution}</p>
+                            
+                            {functionError.retryAfter && (
+                                <p className="mb-4 text-sm font-semibold text-red-900">
+                                    ⏱️ Please wait at least {Math.ceil(functionError.retryAfter / 60)} minute(s) before trying again.
+                                </p>
+                            )}
+
+                            {functionError.type === 'upload_timeout' && (
+                                <div className="bg-blue-50 border border-blue-200 rounded p-3 mt-4">
+                                    <p className="text-blue-800 text-sm font-semibold mb-2">📁 Audio Compression Tips:</p>
+                                    <ul className="text-blue-700 text-xs space-y-1">
+                                        <li>• Use <strong>Audacity</strong> (free) to compress: Export → MP3 → 128kbps or lower</li>
+                                        <li>• Online tools: <strong>audio-compressor.com</strong> or <strong>onlineaudioconverter.com</strong></li>
+                                        <li>• For long recordings: Split into 5-10 minute segments</li>
+                                        <li>• Convert to MP3 format for smaller file sizes</li>
+                                    </ul>
+                                </div>
+                            )}
+                            
+                            {functionError.type === 'subscription' && (
+                                <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => window.open('https://base44.com/dashboard', '_blank')}
+                                        className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black border-yellow-500"
+                                    >
+                                        <Crown className="w-4 h-4" />
+                                        Upgrade Base44 Platform Plan
+                                        <ExternalLink className="w-3 h-3" />
+                                    </Button>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => setFunctionError(null)}
+                                        className="bg-white"
+                                    >
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
+                            {(functionError.type === 'quota' || functionError.type === 'billing') && (
+                                <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => window.open('https://platform.openai.com/usage', '_blank')}
+                                        className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white border-green-600"
+                                    >
+                                        <DollarSign className="w-4 h-4" />
+                                        Check AI Provider Billing
+                                        <ExternalLink className="w-3 h-3" />
+                                    </Button>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => setFunctionError(null)}
+                                        className="bg-white"
+                                    >
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            )}
+                            {(!['subscription', 'quota', 'billing', 'upload_timeout'].includes(functionError.type)) && (
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => setFunctionError(null)}
+                                    className="mt-4 bg-white"
+                                >
+                                    Dismiss
+                                </Button>
+                            )}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                <SubscriptionGate feature="advanced_investigation">
+                    <div className="grid lg:grid-cols-3 gap-8">
+                        {/* Upload and Processing Section */}
+                        <div className="lg:col-span-2 space-y-6">
+                            <Card className="border-0 shadow-lg bg-white">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Upload className="w-5 h-5 text-purple-600" />
+                                        Upload Audio Evidence
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div>
+                                        <Label htmlFor="case-context">Case Context (Optional)</Label>
+                                        <Input
+                                            id="case-context"
+                                            placeholder="e.g., Meeting with City Council, Police interaction recording"
+                                            value={caseContext}
+                                            onChange={(e) => setCaseContext(e.target.value)}
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <Label htmlFor="case-notes">Investigation Notes (Optional)</Label>
+                                        <Textarea
+                                            id="case-notes"
+                                            placeholder="Add any context about this recording that would help with analysis..."
+                                            value={caseNotes}
+                                            onChange={(e) => setCaseNotes(e.target.value)}
+                                            className="h-20"
+                                        />
+                                    </div>
+
+                                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept={SUPPORTED_FORMATS.join(',')}
+                                            onChange={handleFileSelect}
+                                            className="hidden"
+                                        />
+                                        <FileAudio className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                        <p className="text-slate-600 mb-2">Select audio file to analyze</p>
+                                        <p className="text-xs text-slate-500 mb-4">
+                                            Supports: {SUPPORTED_FORMATS.join(', ')} (Max {(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB)
+                                        </p>
+                                        <Button 
+                                            onClick={() => fileInputRef.current?.click()}
+                                            variant="outline"
+                                        >
+                                            Choose File
+                                        </Button>
+                                    </div>
+
+                                    {selectedFile && (
+                                        <div className="bg-slate-50 rounded-lg p-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <FileAudio className="w-5 h-5 text-purple-600" />
+                                                    <div>
+                                                        <p className="font-medium text-slate-900">{selectedFile.name}</p>
+                                                        <p className="text-xs text-slate-500">
+                                                            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {audioUrl && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={togglePlayPause}
+                                                    >
+                                                        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            
+                                            {audioUrl && (
+                                                <audio
+                                                    ref={audioRef}
+                                                    src={audioUrl}
+                                                    onPlay={() => setIsPlaying(true)}
+                                                    onPause={() => setIsPlaying(false)}
+                                                    onEnded={() => setIsPlaying(false)}
+                                                    className="w-full"
+                                                    controls
+                                                />
+                                            )}
+                                            
+                                            <Button
+                                                onClick={handleUploadAndProcess}
+                                                disabled={isUploading || isProcessing || !!functionError}
+                                                className="w-full mt-4 bg-purple-600 hover:bg-purple-700"
+                                            >
+                                                {isUploading || isProcessing ? (
+                                                    <>
+                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                        {isUploading ? 'Uploading...' : 'Processing...'}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Zap className="w-4 h-4 mr-2" />
+                                                        Transcribe & Analyze Audio
+                                                    </>
+                                                )}
+                                            </Button>
+                                            
+                                            {(isUploading || isProcessing) && (
+                                                <div className="mt-3">
+                                                    <Progress 
+                                                        value={isUploading ? uploadProgress : processingProgress} 
+                                                        className="h-2"
+                                                    />
+                                                    <p className="text-xs text-slate-500 mt-1">
+                                                        {isUploading ? `Uploading: ${uploadProgress}%` : `Processing: ${processingProgress}%`}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            {/* Results Section */}
+                            {transcriptionResult && (
+                                <Card className="border-0 shadow-lg bg-white">
+                                    <CardHeader>
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Volume2 className="w-5 h-5 text-green-600" />
+                                                Transcription Results
+                                            </CardTitle>
+                                            <Button onClick={downloadTranscript} variant="outline" size="sm">
+                                                <Download className="w-4 h-4 mr-2" />
+                                                Download
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center"> {/* Changed grid-cols-3 to grid-cols-2 md:grid-cols-4 */}
+                                            <div className="bg-slate-50 rounded-lg p-3">
+                                                <div className="flex items-center justify-center gap-2 mb-1">
+                                                    <Clock className="w-4 h-4 text-slate-600" />
+                                                    <span className="text-sm font-medium text-slate-900">Duration</span>
+                                                </div>
+                                                <p className="text-lg font-bold text-purple-600">
+                                                    {transcriptionResult.transcript.duration ? 
+                                                        `${Math.floor(transcriptionResult.transcript.duration / 60)}:${Math.floor(transcriptionResult.transcript.duration % 60).toString().padStart(2, '0')}` : 
+                                                        'Unknown'
+                                                    }
+                                                </p>
+                                            </div>
+                                            <div className="bg-slate-50 rounded-lg p-3">
+                                                <div className="flex items-center justify-center gap-2 mb-1">
+                                                    <Globe className="w-4 h-4 text-slate-600" /> {/* Changed icon from Users to Globe */}
+                                                    <span className="text-sm font-medium text-slate-900">Language</span>
+                                                </div>
+                                                <p className="text-lg font-bold text-blue-600">
+                                                    {transcriptionResult.transcript.language || 'Unknown'}
+                                                </p>
+                                            </div>
+                                            {transcriptionResult.transcript.speaker_count && ( // Conditionally render speakers
+                                                <div className="bg-slate-50 rounded-lg p-3">
+                                                    <div className="flex items-center justify-center gap-2 mb-1">
+                                                        <Users className="w-4 h-4 text-slate-600" />
+                                                        <span className="text-sm font-medium text-slate-900">Speakers</span>
+                                                    </div>
+                                                    <p className="text-lg font-bold text-orange-600">
+                                                        {transcriptionResult.transcript.speaker_count}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            <div className="bg-slate-50 rounded-lg p-3">
+                                                <div className="flex items-center justify-center gap-2 mb-1">
+                                                    <FileAudio className="w-4 h-4 text-slate-600" />
+                                                    <span className="text-sm font-medium text-slate-900">Segments</span>
+                                                </div>
+                                                <p className="text-lg font-bold text-green-600">
+                                                    {transcriptionResult.transcript.segments?.length || 0}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <Label className="text-base font-semibold">Full Transcript</Label>
+                                            <Textarea
+                                                value={transcriptionResult.transcript.full_text}
+                                                readOnly
+                                                className="mt-2 h-40 text-sm"
+                                            />
+                                        </div>
+
+                                        {transcriptionResult.analysis && transcriptionResult.analysis.summary && (
+                                            <div>
+                                                <Label className="text-base font-semibold">AI Analysis</Label>
+                                                <Textarea
+                                                    value={transcriptionResult.analysis.summary}
+                                                    readOnly
+                                                    className="mt-2 h-40 text-sm bg-slate-50 border-purple-200"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {transcriptionResult.transcript.segments && transcriptionResult.transcript.segments.length > 0 && (
+                                            <div>
+                                                <Label className="text-base font-semibold">Timestamped Segments</Label>
+                                                <div className="mt-2 max-h-60 overflow-y-auto space-y-2">
+                                                    {transcriptionResult.transcript.segments.map((segment, index) => (
+                                                        <div key={index} className="bg-slate-50 rounded-lg p-3">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    {segment.start !== undefined ? 
+                                                                        `${Math.floor(segment.start / 60)}:${(segment.start % 60).toFixed(1).padStart(4, '0')}` : 
+                                                                        'Unknown'
+                                                                    } - {segment.end !== undefined ? 
+                                                                        `${Math.floor(segment.end / 60)}:${(segment.end % 60).toFixed(1).padStart(4, '0')}` : 
+                                                                        'Unknown'
+                                                                    }
+                                                                </Badge>
+                                                                {segment.speaker && ( // Conditionally render speaker badge
+                                                                    <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-800">
+                                                                        Speaker {segment.speaker}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-sm text-slate-700">{segment.text}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
+
+                        {/* Sidebar - Tips and Info */}
+                        <div className="space-y-6">
+                            <Card className="border-0 shadow-lg bg-purple-50 border-purple-200">
+                                <CardHeader>
+                                    <CardTitle className="text-purple-900 flex items-center gap-2">
+                                        <AudioLines className="w-5 h-5" />
+                                        Audio Quality Tips
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3 text-sm text-purple-800">
+                                    <div>
+                                        <strong>For Best Results:</strong>
+                                        <ul className="list-disc pl-4 mt-1 space-y-1">
+                                            <li>Use clear, uncompressed formats (WAV, FLAC)</li>
+                                            <li>Minimize background noise when possible</li>
+                                            <li>Ensure speakers are close to microphone</li>
+                                            <li>Avoid overlapping conversations</li>
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <strong>Legal Considerations:</strong>
+                                        <ul className="list-disc pl-4 mt-1 space-y-1">
+                                            <li>Verify recording legality in your state</li>
+                                            <li>Document when, where, and who was recorded</li>
+                                            <li>Keep original files unedited</li>
+                                            <li>Consider chain of custody requirements</li>
+                                        </ul>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border-0 shadow-lg bg-slate-900 text-white">
+                                <CardContent className="p-6">
+                                    <h3 className="font-semibold mb-2 flex items-center gap-2">
+                                        <Shield className="w-4 h-4" />
+                                        Evidence Security
+                                    </h3>
+                                    <p className="text-sm text-slate-300 leading-relaxed">
+                                        All audio files are processed securely and temporarily. Original files are encrypted 
+                                        during processing and transcripts can be downloaded for your records.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </SubscriptionGate>
+            </div>
+        </div>
+    );
+}

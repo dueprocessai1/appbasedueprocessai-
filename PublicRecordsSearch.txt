@@ -1,0 +1,335 @@
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { InvokeLLM } from "@/integrations/Core";
+import { Search, Loader2, FileText, Building, User, MapPin, Calendar } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+
+const searchSchema = {
+    type: "object",
+    properties: {
+        search_summary: {
+            type: "string",
+            description: "A comprehensive summary of findings"
+        },
+        court_records: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    case_name: { type: "string" },
+                    court: { type: "string" },
+                    case_number: { type: "string" },
+                    date: { type: "string" },
+                    status: { type: "string" },
+                    summary: { type: "string" }
+                }
+            }
+        },
+        property_records: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    address: { type: "string" },
+                    owner: { type: "string" },
+                    value: { type: "string" },
+                    purchase_date: { type: "string" },
+                    details: { type: "string" }
+                }
+            }
+        },
+        business_records: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    business_name: { type: "string" },
+                    registration_state: { type: "string" },
+                    status: { type: "string" },
+                    officers: { type: "array", items: { type: "string" } },
+                    address: { type: "string" }
+                }
+            }
+        },
+        professional_licenses: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    license_type: { type: "string" },
+                    license_number: { type: "string" },
+                    status: { type: "string" },
+                    expiration: { type: "string" },
+                    issuing_authority: { type: "string" }
+                }
+            }
+        },
+        news_mentions: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    headline: { type: "string" },
+                    source: { type: "string" },
+                    date: { type: "string" },
+                    summary: { type: "string" }
+                }
+            }
+        },
+        social_media_presence: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    platform: { type: "string" },
+                    profile_info: { type: "string" },
+                    notable_posts: { type: "string" }
+                }
+            }
+        }
+    },
+    required: ["search_summary"]
+};
+
+export default function PublicRecordsSearch() {
+    const [searchData, setSearchData] = useState({
+        query: "",
+        search_type: "person"
+    });
+    const [results, setResults] = useState(null);
+    const [isSearching, setIsSearching] = useState(false);
+    const { toast } = useToast();
+
+    const handleSearch = async () => {
+        if (!searchData.query.trim()) {
+            toast({
+                title: "Search Required",
+                description: "Please enter a name, business, or address to search.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsSearching(true);
+        setResults(null);
+
+        try {
+            const prompt = `Conduct a comprehensive public records search for: "${searchData.query}" (searching as a ${searchData.search_type}).
+
+Please search across ALL available public databases and sources including:
+- Court records (federal, state, local)
+- Property records and real estate transactions
+- Business registrations and corporate filings
+- Professional licenses and certifications
+- News articles and press mentions
+- Public social media profiles and posts
+- Criminal records (if publicly available)
+- Bankruptcy filings
+- Voter registrations
+- Marriage and divorce records
+- Death records
+- Educational records (if public)
+
+Provide a comprehensive report with specific details, dates, and sources. Focus on factual information from public records only.`;
+
+            const result = await InvokeLLM({
+                prompt: prompt,
+                add_context_from_internet: true,
+                response_json_schema: searchSchema
+            });
+
+            setResults(result);
+            toast({
+                title: "Search Complete",
+                description: "Comprehensive public records search completed.",
+            });
+        } catch (error) {
+            console.error("Search error:", error);
+            toast({
+                title: "Search Failed",
+                description: "Unable to complete search. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-6xl mx-auto">
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
+                            <Search className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Public Records Deep Dive</h1>
+                            <p className="text-slate-600 mt-1">Comprehensive AI-powered search across all public databases.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <Card className="border-0 shadow-lg bg-white mb-6">
+                    <CardHeader>
+                        <CardTitle>Advanced Public Records Search</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="md:col-span-2">
+                                <Input 
+                                    placeholder="Enter name, business, or address" 
+                                    value={searchData.query}
+                                    onChange={(e) => setSearchData({...searchData, query: e.target.value})}
+                                />
+                            </div>
+                            <Select
+                                value={searchData.search_type}
+                                onValueChange={(value) => setSearchData({...searchData, search_type: value})}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="person">Person</SelectItem>
+                                    <SelectItem value="business">Business</SelectItem>
+                                    <SelectItem value="property">Property</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        
+                        <Button 
+                            onClick={handleSearch} 
+                            disabled={isSearching}
+                            className="bg-blue-600 hover:bg-blue-700 gap-2"
+                        >
+                            {isSearching ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Searching...</>
+                            ) : (
+                                <><Search className="w-4 h-4" /> Search Public Records</>
+                            )}
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                {results && (
+                    <div className="space-y-6">
+                        <Card className="border-0 shadow-lg bg-white">
+                            <CardHeader>
+                                <CardTitle>Search Summary</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-slate-700">{results.search_summary}</p>
+                            </CardContent>
+                        </Card>
+
+                        {results.court_records?.length > 0 && (
+                            <Card className="border-0 shadow-lg bg-white">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-red-600" />
+                                        Court Records
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        {results.court_records.map((record, index) => (
+                                            <div key={index} className="p-4 bg-red-50 rounded-lg">
+                                                <h4 className="font-semibold text-red-900">{record.case_name}</h4>
+                                                <div className="text-sm text-red-700 mt-1">
+                                                    {record.court} • Case #{record.case_number} • {record.date}
+                                                </div>
+                                                <Badge className="mt-2 bg-red-100 text-red-800">{record.status}</Badge>
+                                                <p className="text-sm text-red-800 mt-2">{record.summary}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {results.property_records?.length > 0 && (
+                            <Card className="border-0 shadow-lg bg-white">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <MapPin className="w-5 h-5 text-green-600" />
+                                        Property Records
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        {results.property_records.map((property, index) => (
+                                            <div key={index} className="p-4 bg-green-50 rounded-lg">
+                                                <h4 className="font-semibold text-green-900">{property.address}</h4>
+                                                <div className="text-sm text-green-700 mt-1">
+                                                    Owner: {property.owner} • Value: {property.value}
+                                                </div>
+                                                <p className="text-sm text-green-800 mt-2">{property.details}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {results.business_records?.length > 0 && (
+                            <Card className="border-0 shadow-lg bg-white">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Building className="w-5 h-5 text-blue-600" />
+                                        Business Records
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        {results.business_records.map((business, index) => (
+                                            <div key={index} className="p-4 bg-blue-50 rounded-lg">
+                                                <h4 className="font-semibold text-blue-900">{business.business_name}</h4>
+                                                <div className="text-sm text-blue-700 mt-1">
+                                                    {business.registration_state} • {business.status}
+                                                </div>
+                                                {business.officers?.length > 0 && (
+                                                    <div className="text-sm text-blue-800 mt-2">
+                                                        Officers: {business.officers.join(', ')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {results.news_mentions?.length > 0 && (
+                            <Card className="border-0 shadow-lg bg-white">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <FileText className="w-5 h-5 text-purple-600" />
+                                        News & Media Mentions
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        {results.news_mentions.map((mention, index) => (
+                                            <div key={index} className="p-4 bg-purple-50 rounded-lg">
+                                                <h4 className="font-semibold text-purple-900">{mention.headline}</h4>
+                                                <div className="text-sm text-purple-700 mt-1">
+                                                    {mention.source} • {mention.date}
+                                                </div>
+                                                <p className="text-sm text-purple-800 mt-2">{mention.summary}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}

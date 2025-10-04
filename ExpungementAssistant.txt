@@ -1,0 +1,420 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ExpungementCase } from "@/entities/ExpungementCase";
+import { InvokeLLM } from "@/integrations/Core";
+import { FileSignature, CheckCircle, AlertTriangle, Clock, Scale } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+
+export default function ExpungementAssistant() {
+    const [currentCase, setCurrentCase] = useState({
+        case_title: "",
+        state: "",
+        county: "",
+        case_number: "",
+        conviction_date: "",
+        charges: [],
+        case_outcome: "",
+        sentence_completed: false,
+        sentence_completion_date: "",
+        notes: ""
+    });
+    const [newCharge, setNewCharge] = useState("");
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [eligibilityResult, setEligibilityResult] = useState(null);
+    const [savedCases, setSavedCases] = useState([]);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        loadSavedCases();
+    }, []);
+
+    const loadSavedCases = async () => {
+        try {
+            const cases = await ExpungementCase.list("-created_date");
+            setSavedCases(cases);
+        } catch (error) {
+            console.error("Error loading cases:", error);
+        }
+    };
+
+    const addCharge = () => {
+        if (newCharge.trim()) {
+            setCurrentCase({
+                ...currentCase,
+                charges: [...currentCase.charges, newCharge.trim()]
+            });
+            setNewCharge("");
+        }
+    };
+
+    const removeCharge = (index) => {
+        setCurrentCase({
+            ...currentCase,
+            charges: currentCase.charges.filter((_, i) => i !== index)
+        });
+    };
+
+    const analyzeEligibility = async () => {
+        if (!currentCase.state || !currentCase.case_outcome || currentCase.charges.length === 0) {
+            toast({
+                title: "Missing Information",
+                description: "Please provide state, case outcome, and at least one charge.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsAnalyzing(true);
+        try {
+            const analysisPrompt = `Analyze expungement eligibility for this case:
+State: ${currentCase.state}
+Case Outcome: ${currentCase.case_outcome}
+Charges: ${currentCase.charges.join(", ")}
+Sentence Completed: ${currentCase.sentence_completed ? "Yes" : "No"}
+${currentCase.sentence_completion_date ? `Completion Date: ${currentCase.sentence_completion_date}` : ""}
+
+Provide:
+1. Eligibility determination (eligible/ineligible/unclear)
+2. Legal reasoning based on ${currentCase.state} law
+3. Required documents for filing
+4. Step-by-step process
+5. Potential challenges or waiting periods`;
+
+            const result = await InvokeLLM({
+                prompt: analysisPrompt,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        eligibility: { type: "string", enum: ["eligible", "ineligible", "unclear"] },
+                        reasoning: { type: "string" },
+                        required_documents: { type: "array", items: { type: "string" } },
+                        process_steps: { type: "array", items: { type: "string" } },
+                        potential_challenges: { type: "string" },
+                        waiting_period: { type: "string" }
+                    }
+                }
+            });
+
+            setEligibilityResult(result);
+            toast({
+                title: "Analysis Complete",
+                description: "Eligibility analysis has been generated."
+            });
+
+        } catch (error) {
+            console.error("Analysis error:", error);
+            toast({
+                title: "Analysis Failed",
+                description: "Unable to analyze eligibility. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const saveCase = async () => {
+        try {
+            const caseData = {
+                ...currentCase,
+                eligibility_status: eligibilityResult?.eligibility || "unknown",
+                eligibility_analysis: JSON.stringify(eligibilityResult),
+                required_documents: eligibilityResult?.required_documents || []
+            };
+
+            await ExpungementCase.create(caseData);
+            toast({
+                title: "Case Saved",
+                description: "Your expungement case has been saved successfully."
+            });
+            loadSavedCases();
+        } catch (error) {
+            console.error("Save error:", error);
+            toast({
+                title: "Save Failed",
+                description: "Unable to save case. Please try again.",
+                variant: "destructive"
+            });
+        }
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-700 rounded-xl flex items-center justify-center">
+                            <FileSignature className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Record Clearing & Expungement Assistant</h1>
+                            <p className="text-slate-600 mt-1">Clear your record and reclaim your rights</p>
+                        </div>
+                    </div>
+
+                    <Alert className="bg-green-50 border-green-200">
+                        <Scale className="h-4 w-4 text-green-600" />
+                        <AlertTitle className="text-green-900">Your Right to a Clean Slate</AlertTitle>
+                        <AlertDescription className="text-green-800">
+                            Many people don't know they can clear their criminal record. This tool helps you understand your eligibility and guides you through the legal process to remove or seal past convictions.
+                        </AlertDescription>
+                    </Alert>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Case Input Form */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Case Information</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="case_title">Case Title</Label>
+                                        <Input
+                                            id="case_title"
+                                            value={currentCase.case_title}
+                                            onChange={(e) => setCurrentCase({...currentCase, case_title: e.target.value})}
+                                            placeholder="e.g., My 2018 DUI Case"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="state">State</Label>
+                                        <Input
+                                            id="state"
+                                            value={currentCase.state}
+                                            onChange={(e) => setCurrentCase({...currentCase, state: e.target.value})}
+                                            placeholder="e.g., California"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="county">County</Label>
+                                        <Input
+                                            id="county"
+                                            value={currentCase.county}
+                                            onChange={(e) => setCurrentCase({...currentCase, county: e.target.value})}
+                                            placeholder="e.g., Los Angeles"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="case_number">Case Number</Label>
+                                        <Input
+                                            id="case_number"
+                                            value={currentCase.case_number}
+                                            onChange={(e) => setCurrentCase({...currentCase, case_number: e.target.value})}
+                                            placeholder="e.g., CR-2018-12345"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="case_outcome">Case Outcome</Label>
+                                    <Select value={currentCase.case_outcome} onValueChange={(value) => setCurrentCase({...currentCase, case_outcome: value})}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select outcome" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="dismissed">Case Dismissed</SelectItem>
+                                            <SelectItem value="acquitted">Found Not Guilty</SelectItem>
+                                            <SelectItem value="conviction">Convicted at Trial</SelectItem>
+                                            <SelectItem value="plea_bargain">Plea Bargain</SelectItem>
+                                            <SelectItem value="other">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <Label>Charges</Label>
+                                    <div className="flex gap-2 mb-2">
+                                        <Input
+                                            value={newCharge}
+                                            onChange={(e) => setNewCharge(e.target.value)}
+                                            placeholder="Enter a charge (e.g., DUI, Petty Theft)"
+                                            onKeyPress={(e) => e.key === 'Enter' && addCharge()}
+                                        />
+                                        <Button type="button" onClick={addCharge}>Add</Button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {currentCase.charges.map((charge, index) => (
+                                            <Badge key={index} variant="secondary" className="cursor-pointer" onClick={() => removeCharge(index)}>
+                                                {charge} ×
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="conviction_date">Conviction Date</Label>
+                                        <Input
+                                            id="conviction_date"
+                                            type="date"
+                                            value={currentCase.conviction_date}
+                                            onChange={(e) => setCurrentCase({...currentCase, conviction_date: e.target.value})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="sentence_completion_date">Sentence Completed Date</Label>
+                                        <Input
+                                            id="sentence_completion_date"
+                                            type="date"
+                                            value={currentCase.sentence_completion_date}
+                                            onChange={(e) => setCurrentCase({...currentCase, sentence_completion_date: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="sentence_completed"
+                                        checked={currentCase.sentence_completed}
+                                        onCheckedChange={(checked) => setCurrentCase({...currentCase, sentence_completed: checked})}
+                                    />
+                                    <Label htmlFor="sentence_completed">All sentence requirements have been completed (probation, fines, community service, etc.)</Label>
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="notes">Additional Notes</Label>
+                                    <Textarea
+                                        id="notes"
+                                        value={currentCase.notes}
+                                        onChange={(e) => setCurrentCase({...currentCase, notes: e.target.value})}
+                                        placeholder="Any additional details about your case..."
+                                    />
+                                </div>
+
+                                <Button onClick={analyzeEligibility} disabled={isAnalyzing} className="w-full">
+                                    {isAnalyzing ? (
+                                        <>
+                                            <Clock className="w-4 h-4 mr-2 animate-spin" />
+                                            Analyzing Eligibility...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Scale className="w-4 h-4 mr-2" />
+                                            Analyze Expungement Eligibility
+                                        </>
+                                    )}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Results Panel */}
+                    <div className="space-y-6">
+                        {eligibilityResult ? (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        {eligibilityResult.eligibility === 'eligible' ? (
+                                            <CheckCircle className="w-5 h-5 text-green-600" />
+                                        ) : eligibilityResult.eligibility === 'ineligible' ? (
+                                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                                        ) : (
+                                            <Clock className="w-5 h-5 text-yellow-600" />
+                                        )}
+                                        Eligibility Analysis
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <Badge 
+                                        className={
+                                            eligibilityResult.eligibility === 'eligible' ? 'bg-green-100 text-green-800 border-green-200' :
+                                            eligibilityResult.eligibility === 'ineligible' ? 'bg-red-100 text-red-800 border-red-200' :
+                                            'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                        }
+                                    >
+                                        {eligibilityResult.eligibility.replace('_', ' ').toUpperCase()}
+                                    </Badge>
+
+                                    <div>
+                                        <h4 className="font-semibold mb-2">Legal Analysis</h4>
+                                        <p className="text-sm text-slate-600">{eligibilityResult.reasoning}</p>
+                                    </div>
+
+                                    {eligibilityResult.required_documents && (
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Required Documents</h4>
+                                            <ul className="text-sm text-slate-600 list-disc list-inside">
+                                                {eligibilityResult.required_documents.map((doc, index) => (
+                                                    <li key={index}>{doc}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {eligibilityResult.process_steps && (
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Next Steps</h4>
+                                            <ol className="text-sm text-slate-600 list-decimal list-inside space-y-1">
+                                                {eligibilityResult.process_steps.map((step, index) => (
+                                                    <li key={index}>{step}</li>
+                                                ))}
+                                            </ol>
+                                        </div>
+                                    )}
+
+                                    <Button onClick={saveCase} className="w-full">
+                                        Save This Case
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card>
+                                <CardContent className="p-12 text-center">
+                                    <Scale className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Ready for Analysis</h3>
+                                    <p className="text-slate-600 text-sm">
+                                        Fill out your case information and click "Analyze Eligibility" to get started.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Saved Cases */}
+                        {savedCases.length > 0 && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Your Saved Cases</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-2">
+                                        {savedCases.slice(0, 3).map((savedCase) => (
+                                            <div key={savedCase.id} className="p-3 border rounded-lg">
+                                                <div className="font-medium">{savedCase.case_title}</div>
+                                                <div className="text-sm text-slate-600">{savedCase.state} • {savedCase.case_outcome}</div>
+                                                <Badge 
+                                                    variant="outline" 
+                                                    className={
+                                                        savedCase.eligibility_status === 'eligible' ? 'border-green-200 text-green-700' :
+                                                        savedCase.eligibility_status === 'ineligible' ? 'border-red-200 text-red-700' :
+                                                        'border-gray-200 text-gray-700'
+                                                    }
+                                                >
+                                                    {savedCase.eligibility_status}
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

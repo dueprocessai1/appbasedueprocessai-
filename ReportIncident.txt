@@ -1,0 +1,308 @@
+
+import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { PoliceInteraction } from "@/entities/all";
+import { useToast } from "@/components/ui/use-toast";
+import { FileText, Shield, Loader2 } from 'lucide-react';
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { FileSignature, CheckCircle } from 'lucide-react';
+
+const severityMap = {
+    minor: { label: "Minor", class: "bg-green-100 text-green-800" },
+    moderate: { label: "Moderate", class: "bg-yellow-100 text-yellow-800" },
+    serious: { label: "Serious", class: "bg-orange-100 text-orange-800" },
+    severe: { label: "Severe", class: "bg-red-100 text-red-800" }
+};
+
+const rightsViolationOptions = [
+    { value: "unreasonable_search", label: "Unreasonable Search" },
+    { value: "excessive_force", label: "Excessive Force" },
+    { value: "illegal_detention", label: "Illegal Detention" },
+    { value: "miranda_violation", label: "Miranda Violation" },
+    { value: "discrimination", label: "Discrimination" },
+    { value: "other", label: "Other" }
+];
+
+export default function ReportIncident() {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submissionSuccess, setSubmissionSuccess] = useState(false);
+    const [newIncidentId, setNewIncidentId] = useState(null);
+    const [selectedViolations, setSelectedViolations] = useState([]);
+    const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm();
+    const { toast } = useToast();
+
+    const handleViolationToggle = (violation) => {
+        const newViolations = selectedViolations.includes(violation)
+            ? selectedViolations.filter(v => v !== violation)
+            : [...selectedViolations, violation];
+        setSelectedViolations(newViolations);
+    };
+
+    const onSubmit = async (data) => {
+        setIsSubmitting(true);
+        try {
+            const interactionData = {
+                ...data,
+                rights_violations: selectedViolations
+            };
+
+            const newIncident = await PoliceInteraction.create(interactionData);
+            
+            toast({
+                title: "Incident Reported",
+                description: "Your police interaction has been documented and saved securely.",
+            });
+            
+            setNewIncidentId(newIncident.id);
+            setSubmissionSuccess(true);
+            
+        } catch (error) {
+            console.error("Error submitting incident:", error);
+            toast({
+                title: "Submission Failed",
+                description: "Failed to report incident. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (submissionSuccess) {
+        return (
+            <div className="p-6">
+                <div className="max-w-2xl mx-auto text-center py-12">
+                    <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Report Saved Successfully!</h1>
+                    <p className="text-slate-600 mb-6">Your incident has been securely documented. What would you like to do next?</p>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        <Link to={createPageUrl(`LegalDraftsman?source_incident_id=${newIncidentId}`)}>
+                            <Button className="w-full">
+                                <FileSignature className="w-4 h-4 mr-2" />
+                                Generate Legal Documents
+                            </Button>
+                        </Link>
+                        <Link to={createPageUrl("MyIncidents")}>
+                            <Button variant="outline" className="w-full">
+                                View All Incidents
+                            </Button>
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-4xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-amber-600 to-amber-700 rounded-xl flex items-center justify-center">
+                            <FileText className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Report Police Interaction</h1>
+                            <p className="text-slate-600 mt-1">Document your encounter for due process review</p>
+                        </div>
+                    </div>
+                </div>
+
+                <Card className="border-0 shadow-lg bg-white">
+                    <form onSubmit={handleSubmit(onSubmit)}>
+                        <CardHeader>
+                            <CardTitle className="text-xl font-bold text-slate-900">Due Process Audit</CardTitle>
+                            <p className="text-slate-600">Provide detailed information about your police interaction</p>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {/* Basic Information */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <Label htmlFor="date">Date of Interaction *</Label>
+                                    <Input 
+                                        id="date" 
+                                        type="date" 
+                                        {...register("date", { required: "Date is required" })}
+                                    />
+                                    {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date.message}</p>}
+                                </div>
+                                <div>
+                                    <Label htmlFor="time">Time of Interaction</Label>
+                                    <Input 
+                                        id="time" 
+                                        type="time" 
+                                        {...register("time")}
+                                    />
+                                </div>
+                                <div>
+                                    <Label htmlFor="location">Location *</Label>
+                                    <Input 
+                                        id="location" 
+                                        placeholder="Street address, intersection, or general area"
+                                        {...register("location", { required: "Location is required" })}
+                                    />
+                                    {errors.location && <p className="text-red-500 text-xs mt-1">{errors.location.message}</p>}
+                                </div>
+                                <div>
+                                    <Label htmlFor="agency">Law Enforcement Agency</Label>
+                                    <Input 
+                                        id="agency" 
+                                        placeholder="e.g., City Police, State Patrol, Sheriff's Dept"
+                                        {...register("agency")}
+                                    />
+                                </div>
+                                <div>
+                                    <Label htmlFor="officer_name">Officer Name</Label>
+                                    <Input 
+                                        id="officer_name" 
+                                        placeholder="If known or visible on badge/uniform"
+                                        {...register("officer_name")}
+                                    />
+                                </div>
+                                <div>
+                                    <Label htmlFor="badge_number">Badge Number</Label>
+                                    <Input 
+                                        id="badge_number" 
+                                        placeholder="If visible"
+                                        {...register("badge_number")}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Encounter Details */}
+                            <div className="space-y-4">
+                                <div>
+                                    <Label htmlFor="encounter_type">Type of Encounter *</Label>
+                                    <Select onValueChange={(value) => setValue("encounter_type", value)}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select encounter type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="traffic_stop">Traffic Stop</SelectItem>
+                                            <SelectItem value="pedestrian_stop">Pedestrian Stop</SelectItem>
+                                            <SelectItem value="home_visit">Home Visit</SelectItem>
+                                            <SelectItem value="arrest">Arrest</SelectItem>
+                                            <SelectItem value="questioning">Questioning</SelectItem>
+                                            <SelectItem value="other">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.encounter_type && <p className="text-red-500 text-xs mt-1">Encounter type is required</p>}
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="summary">Detailed Summary *</Label>
+                                    <Textarea 
+                                        id="summary" 
+                                        placeholder="Describe what happened in detail. Include what was said, actions taken, and your observations."
+                                        className="h-32"
+                                        {...register("summary", { required: "Summary is required" })}
+                                    />
+                                    {errors.summary && <p className="text-red-500 text-xs mt-1">{errors.summary.message}</p>}
+                                </div>
+
+                                <div>
+                                    <Label htmlFor="severity_level">Severity Assessment</Label>
+                                    <Select onValueChange={(value) => setValue("severity_level", value)}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="How serious was this incident?" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="minor">Minor - No significant issues</SelectItem>
+                                            <SelectItem value="moderate">Moderate - Some concerning behavior</SelectItem>
+                                            <SelectItem value="serious">Serious - Clear violations or misconduct</SelectItem>
+                                            <SelectItem value="severe">Severe - Egregious violations or abuse</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {/* Rights Violations */}
+                            <div>
+                                <Label className="text-base font-semibold">Potential Rights Violations</Label>
+                                <p className="text-sm text-slate-600 mb-3">Check any that may apply to your situation</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {rightsViolationOptions.map((option) => (
+                                        <div key={option.value} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={option.value}
+                                                checked={selectedViolations.includes(option.value)}
+                                                onCheckedChange={() => handleViolationToggle(option.value)}
+                                            />
+                                            <Label htmlFor={option.value} className="text-sm">{option.label}</Label>
+                                        </div>
+                                    ))}
+                                </div>
+                                {selectedViolations.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-3">
+                                        {selectedViolations.map((violation) => {
+                                            const option = rightsViolationOptions.find(o => o.value === violation);
+                                            return (
+                                                <Badge key={violation} variant="destructive">
+                                                    {option?.label}
+                                                </Badge>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Additional Information */}
+                            <div className="space-y-4">
+                                <div>
+                                    <Label htmlFor="witnesses">Witness Information</Label>
+                                    <Textarea 
+                                        id="witnesses" 
+                                        placeholder="Names, contact info, and details about any witnesses present"
+                                        className="h-20"
+                                        {...register("witnesses")}
+                                    />
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="follow_up_needed"
+                                        {...register("follow_up_needed")}
+                                    />
+                                    <Label htmlFor="follow_up_needed" className="text-sm">
+                                        This incident requires follow-up action or legal review
+                                    </Label>
+                                </div>
+                            </div>
+                            
+                            {/* Submit Button */}
+                            <div className="pt-6 border-t border-slate-200">
+                                <Button 
+                                    type="submit" 
+                                    className="w-full" 
+                                    disabled={isSubmitting}
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Reporting Incident...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Shield className="mr-2 h-4 w-4" />
+                                            Report Due Process Audit
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </form>
+                </Card>
+            </div>
+        </div>
+    );
+}

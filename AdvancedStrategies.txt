@@ -1,0 +1,121 @@
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Scale, AlertTriangle, Shield, Gavel, FileWarning, BookOpen } from "lucide-react";
+
+const strategyCategories = [
+    {
+        title: "Statute of Limitations Loopholes",
+        icon: FileWarning,
+        strategies: [
+            {
+                name: "Tolling Provisions",
+                description: "The 'clock' on a statute of limitations can be paused (tolled) by certain events, such as the defendant leaving the state or being a minor. This can give you more time to file your case.",
+                applicability: "Varies by state, but common in many jurisdictions."
+            },
+            {
+                name: "Equitable Estoppel",
+                description: "If a defendant actively concealed evidence or misled you to prevent you from filing on time, a court may stop (estop) them from using the statute of limitations as a defense.",
+                applicability: "A powerful but high-bar argument, used when there is clear evidence of deception."
+            }
+        ]
+    },
+    {
+        title: "Jurisdictional Loopholes",
+        icon: Gavel,
+        strategies: [
+            {
+                name: "Lack of Personal Jurisdiction",
+                description: "A court must have power over you to hear a case against you. If you have minimal or no contact with the state where you're being sued, you can file a motion to dismiss the case.",
+                applicability: "Crucial for defendants sued in a distant or unfamiliar state."
+            },
+            {
+                name: "Forum Non Conveniens",
+                description: "If a case is filed in a court that is deeply inconvenient for you (e.g., all witnesses and evidence are in another state), you can ask the court to transfer it to a more appropriate location (forum).",
+                applicability: "Used to move a case to a more logical or sometimes more favorable jurisdiction."
+            }
+        ]
+    },
+    {
+        title: "Evidentiary Loopholes",
+        icon: Shield,
+        strategies: [
+            {
+                name: "Hearsay Exceptions",
+                description: "While hearsay (out-of-court statements) is usually inadmissible, there are many powerful exceptions. Statements made during a stressful event ('excited utterance') or business records are common examples that can be admitted as evidence.",
+                applicability: "Found in all jurisdictions; knowing these exceptions is key to getting your evidence heard."
+            },
+            {
+                name: "Privilege Waivers",
+                description: "Confidential communications (like with your lawyer) are privileged. However, if the opposing party discusses these communications with a third party or mentions them in court, they may have 'waived' the privilege, making the information discoverable.",
+                applicability: "A frequent tactical error made by opposing parties that can open doors to new evidence."
+            }
+        ]
+    },
+    {
+        title: "Procedural Loopholes",
+        icon: BookOpen,
+        strategies: [
+            {
+                name: "Improper Service of Process",
+                description: "The law requires that you be formally notified (served) of a lawsuit in a very specific way. If the plaintiff fails to follow these rules, you can file a motion to dismiss the entire case.",
+                applicability: "A common procedural error that can result in a case dismissal, forcing the plaintiff to start over."
+            },
+            {
+                name: "Pleading Technicalities",
+                description: "Court rules require legal documents (pleadings) to be formatted in a specific way and contain certain elements. If the opposing party makes critical errors in their filings, it can be grounds for dismissal.",
+                applicability: "More common against less experienced opponents, this tactic requires a sharp eye for procedural rules."
+            }
+        ]
+    }
+];
+
+export default function AdvancedStrategies() {
+    return (
+        <div className="p-6 space-y-8 bg-slate-50">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-slate-800 rounded-xl flex items-center justify-center">
+                            <Scale className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Advanced Legal Strategies & Loopholes</h1>
+                            <p className="text-slate-600 mt-1">Understanding legal mechanics to strengthen your position.</p>
+                        </div>
+                    </div>
+                     <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Warning: For Educational Use Only</AlertTitle>
+                        <AlertDescription>
+                            These concepts are advanced and their application is highly dependent on the specific facts of your case and your jurisdiction's laws. Using them incorrectly can harm your case. Use this information to have more informed discussions with the AI agents or a qualified attorney.
+                        </AlertDescription>
+                    </Alert>
+                </div>
+
+                <div className="space-y-8">
+                    {strategyCategories.map(category => (
+                        <Card key={category.title} className="border-0 shadow-lg bg-white">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-3">
+                                    <category.icon className="w-6 h-6 text-purple-700" />
+                                    {category.title}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="grid md:grid-cols-2 gap-6">
+                                {category.strategies.map(strategy => (
+                                    <div key={strategy.name} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                        <h3 className="font-semibold text-slate-900 mb-2">{strategy.name}</h3>
+                                        <p className="text-sm text-slate-700 mb-3">{strategy.description}</p>
+                                        <p className="text-xs text-slate-500"><span className="font-semibold">Applicability:</span> {strategy.applicability}</p>
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}

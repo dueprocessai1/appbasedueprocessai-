@@ -1,0 +1,302 @@
+
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, FileSignature, Shield, MailWarning, FileText, Scale, BrainCircuit, Search, Gavel, Users, Info, FileWarning } from 'lucide-react';
+import { createPageUrl } from "@/utils";
+import SmartDocumentSuggestions from '../components/legal/SmartDocumentSuggestions';
+import DocumentGenerator from '../components/legal/DocumentGenerator';
+import SubscriptionGate from '../components/subscription/SubscriptionGate';
+import { AnalyzedDocument, PoliceInteraction } from "@/entities/all";
+import { useToast } from "@/components/ui/use-toast";
+
+const documentTypes = [
+  {
+    id: "civil_rights_complaint",
+    title: "Civil Rights Complaint (§ 1983)",
+    description: "Federal civil rights complaint for constitutional violations by government officials",
+    icon: Shield,
+    color: "bg-blue-600 hover:bg-blue-700",
+    template: true, // Changed from 'link' to 'template'
+    featured: true,
+    companions: ["affidavit", "discovery_request"]
+  },
+  {
+    id: "breach_of_contract_notice",
+    title: "Breach of Contract Notice",
+    description: "Formally notify a party that they have violated a contract",
+    icon: MailWarning,
+    color: "bg-red-600 hover:bg-red-700",
+    template: true,
+    featured: true,
+    companions: ["affidavit"]
+  },
+  {
+    id: "motion_to_dismiss_improper_service",
+    title: "Motion to Dismiss (Improper Service)",
+    description: "Request case dismissal because you were not correctly notified of the lawsuit.",
+    icon: FileWarning,
+    color: "bg-red-600 hover:bg-red-700",
+    template: true,
+    featured: true,
+    companions: ["affidavit"]
+  },
+    {
+    id: "motion_to_dismiss_no_jurisdiction",
+    title: "Motion to Dismiss (Lack of Jurisdiction)",
+    description: "Request case dismissal because the court does not have legal power over you.",
+    icon: FileWarning,
+    color: "bg-red-600 hover:bg-red-700",
+    template: true,
+    featured: true,
+    companions: ["affidavit"]
+  },
+  {
+    id: "motion_compel",
+    title: "Motion to Compel Discovery",
+    description: "Force opposing party to provide withheld information or documents",
+    icon: Gavel,
+    color: "bg-slate-600 hover:bg-slate-700",
+    template: true,
+    companions: ["affidavit", "discovery_request"]
+  },
+  {
+    id: "petition_for_writ_of_mandamus",
+    title: "Petition for Writ of Mandamus",
+    description: "Compel a government official to perform their legal duty",
+    icon: Scale,
+    color: "bg-purple-600 hover:bg-purple-700",
+    template: true,
+    featured: true,
+    companions: ["affidavit", "motion_compel"]
+  },
+  {
+    id: "motion_to_dismiss",
+    title: "Motion to Dismiss",
+    description: "Request the court to dismiss a case due to legal deficiencies",
+    icon: Gavel,
+    color: "bg-slate-600 hover:bg-slate-700",
+    template: true,
+    companions: ["affidavit"]
+  },
+  {
+    id: "discovery_request",
+    title: "Discovery Request",
+    description: "Formally request evidence and information from the opposing party",
+    icon: Search,
+    color: "bg-slate-600 hover:bg-slate-700",
+    template: true,
+    companions: ["motion_compel"]
+  },
+  {
+    id: "affidavit",
+    title: "Affidavit of Facts",
+    description: "Sworn written statement of facts to support your case",
+    icon: FileText,
+    color: "bg-green-600 hover:bg-green-700",
+    template: true
+  },
+  {
+    id: "cease_desist",
+    title: "Cease and Desist Letter",
+    description: "Demand someone stop an unlawful activity",
+    icon: MailWarning,
+    color: "bg-orange-600 hover:bg-orange-700",
+    template: true,
+    companions: ["affidavit"]
+  },
+  {
+    id: "summary_judgment",
+    title: "Motion for Summary Judgment",
+    description: "Request judge rule in your favor without trial",
+    icon: Scale,
+    color: "bg-purple-600 hover:bg-purple-700",
+    template: true,
+    companions: ["affidavit", "discovery_request"]
+  },
+  {
+    id: "habeas_corpus_petition",
+    title: "Petition for Writ of Habeas Corpus",
+    description: "Challenge the legality of your detention or imprisonment",
+    icon: Scale,
+    color: "bg-indigo-600 hover:bg-indigo-700", // Added a distinct color
+    template: true,
+    companions: ["affidavit"]
+  },
+  {
+    id: "custody_agreement",
+    title: "Custody Agreement",
+    description: "Create a formal agreement for child custody arrangements",
+    icon: Users,
+    color: "bg-teal-600 hover:bg-teal-700",
+    template: true,
+    companions: ["affidavit"]
+  }
+];
+
+export default function LegalDraftsman() {
+  const [caseDescription, setCaseDescription] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [isLoadingContext, setIsLoadingContext] = useState(false);
+  const [contextSource, setContextSource] = useState(null);
+  const location = useLocation();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const sourceDocId = searchParams.get('source_doc_id');
+    const sourceIncidentId = searchParams.get('source_incident_id');
+
+    const loadContext = async () => {
+      setIsLoadingContext(true);
+      try {
+        if (sourceDocId) {
+          const doc = await AnalyzedDocument.get(sourceDocId);
+          setCaseDescription(doc.analysis_summary || "Could not load document summary.");
+          setContextSource(`your analysis of "${doc.document_name}"`);
+        } else if (sourceIncidentId) {
+          const incident = await PoliceInteraction.get(sourceIncidentId);
+          setCaseDescription(incident.summary || "Could not load incident summary.");
+          setContextSource(`your reported incident from ${new Date(incident.date).toLocaleDateString()}`);
+        }
+      } catch (error) {
+        console.error("Failed to load context:", error);
+        toast({
+          title: "Failed to Load Context",
+          description: "Could not load the source information. Please paste it manually.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingContext(false);
+      }
+    };
+
+    if (sourceDocId || sourceIncidentId) {
+      loadContext();
+    }
+  }, [location.search, toast]);
+
+  const handleGenerateClick = (docType) => {
+    // The original logic `if (docType.link)` meant it would navigate away.
+    // Now, all `documentTypes` in this file have `template: true`,
+    // so they will all go through the `setSelectedTemplate` path.
+    // If we wanted to preserve the original `link` behavior for *some* types,
+    // we would need to check for `docType.link` explicitly.
+    // Based on the specific change, `template: true` means we select the template.
+    // The `createPageUrl` is no longer used by this specific `documentTypes` array definitions.
+    setSelectedTemplate(docType);
+  };
+
+  if (selectedTemplate) {
+    return (
+      <div className="p-6 space-y-8">
+        <div className="max-w-7xl mx-auto">
+          <SubscriptionGate feature="document_generation">
+            <DocumentGenerator
+              documentType={selectedTemplate}
+              caseContext={caseDescription}
+              onBack={() => setSelectedTemplate(null)}
+              companionDocuments={selectedTemplate.companions || []}
+              allDocumentTypes={documentTypes}
+            />
+          </SubscriptionGate>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-8">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
+            <FileSignature className="w-7 h-7 text-white" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Legal Document Draftsman</h1>
+            <p className="text-slate-600 mt-1">AI-powered generation of legal documents and notices.</p>
+          </div>
+        </div>
+
+        {contextSource && (
+          <Alert className="mb-6 bg-blue-50 border-blue-200">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-blue-900">Context Loaded</AlertTitle>
+            <AlertDescription className="text-blue-800">
+              The case description has been pre-filled based on {contextSource}.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Step 1: Provide Case Context</CardTitle>
+            <p className="text-sm text-slate-600">Enter the facts of your case. The more detail, the better the AI suggestions.</p>
+          </CardHeader>
+          <CardContent>
+            <Label htmlFor="case-description" className="sr-only">Case Description</Label>
+            {isLoadingContext ? (
+              <div className="flex items-center gap-2 text-slate-500 py-3">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Loading context...</span>
+              </div>
+            ) : (
+              <Textarea
+                id="case-description"
+                placeholder="Describe the situation, list the key events, and state the desired outcome..."
+                className="h-36"
+                value={caseDescription}
+                onChange={(e) => setCaseDescription(e.target.value)}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <SmartDocumentSuggestions
+          caseSummary={caseDescription}
+          onSelectTemplate={handleGenerateClick}
+        />
+
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              Quick Templates
+            </CardTitle>
+            <p className="text-slate-600 text-sm">Skip AI analysis and go directly to document creation</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {documentTypes.map((docType) => (
+              <Button
+                key={docType.id}
+                variant="outline"
+                className="w-full justify-start text-left h-auto p-3"
+                onClick={() => handleGenerateClick(docType)}
+              >
+                <div className="flex items-start gap-3">
+                  <docType.icon className="w-5 h-5 text-slate-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="font-medium text-slate-900">{docType.title}</div>
+                    <div className="text-xs text-slate-600 mt-1">{docType.description}</div>
+                    {docType.companions && docType.companions.length > 0 && (
+                      <div className="text-xs text-blue-600 mt-2">
+                        💡 Often filed with: {docType.companions.map(compId => {
+                          const comp = documentTypes.find(d => d.id === compId);
+                          return comp ? comp.title : compId;
+                        }).join(", ")}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

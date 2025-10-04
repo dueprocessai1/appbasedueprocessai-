@@ -1,0 +1,322 @@
+
+import React, { useState, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FOIARequest } from "@/entities/all";
+import { InvokeLLM } from "@/integrations/Core";
+import { useToast } from "@/components/ui/use-toast";
+import { FileText, Plus, Clock, CheckCircle, AlertTriangle, Loader2, FileSearch, Building } from 'lucide-react';
+import { format, addDays } from 'date-fns';
+
+export default function PublicRecordsRequest() {
+    const [requests, setRequests] = useState([]);
+    const [showBuilder, setShowBuilder] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm();
+    const { toast } = useToast();
+
+    const watchSubject = watch("request_subject", "");
+    const watchDescription = watch("request_description", "");
+
+    useEffect(() => {
+        loadRequests();
+    }, []);
+
+    const loadRequests = async () => {
+        try {
+            const data = await FOIARequest.list("-date_submitted");
+            setRequests(data);
+        } catch (error) {
+            console.error("Error loading FOIA requests:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const generateFOIARequest = async () => {
+        if (!watchSubject.trim()) {
+            toast({
+                title: "Missing Information",
+                description: "Please provide a subject for your FOIA request first.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsGenerating(true);
+        try {
+            const prompt = `Generate a professional, legally compliant Freedom of Information Act (FOIA) request for the following subject: "${watchSubject}"
+
+The request should:
+1. Be formally written and legally appropriate
+2. Include specific language invoking FOIA rights
+3. Request expedited processing if appropriate
+4. Include fee waiver language if applicable
+5. Be detailed enough to help the agency identify responsive records
+6. Follow proper FOIA formatting conventions
+
+Current description provided: "${watchDescription}"
+
+Please generate a comprehensive, professional FOIA request description that an agency can easily understand and process.`;
+
+            const result = await InvokeLLM({
+                prompt: prompt,
+                add_context_from_internet: true
+            });
+
+            setValue("request_description", result);
+            toast({
+                title: "FOIA Request Generated",
+                description: "AI has generated a professional FOIA request for you to review and submit.",
+            });
+        } catch (error) {
+            console.error("Error generating FOIA request:", error);
+            toast({
+                title: "Generation Failed",
+                description: "Failed to generate FOIA request. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const onSubmit = async (data) => {
+        setIsSubmitting(true);
+        try {
+            const submissionDate = new Date();
+            const responseDeadline = addDays(submissionDate, 20); // FOIA typically requires 20 business days
+
+            const foiaData = {
+                ...data,
+                date_submitted: format(submissionDate, 'yyyy-MM-dd'),
+                response_deadline: format(responseDeadline, 'yyyy-MM-dd'),
+                status: 'submitted'
+            };
+
+            await FOIARequest.create(foiaData);
+            toast({
+                title: "FOIA Request Submitted",
+                description: "Your request has been logged. Follow up if you don't receive a response by the deadline.",
+            });
+            setShowBuilder(false);
+            loadRequests();
+        } catch (error) {
+            console.error("Error submitting FOIA request:", error);
+            toast({
+                title: "Submission Failed",
+                description: "Failed to submit FOIA request. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'fulfilled': return 'bg-green-100 text-green-800 border-green-200';
+            case 'denied': return 'bg-red-100 text-red-800 border-red-200';
+            case 'overdue': return 'bg-orange-100 text-orange-800 border-orange-200';
+            case 'processing': return 'bg-blue-100 text-blue-800 border-blue-200';
+            case 'acknowledged': return 'bg-purple-100 text-purple-800 border-purple-200';
+            default: return 'bg-slate-100 text-slate-800 border-slate-200';
+        }
+    };
+
+    const getStatusIcon = (status) => {
+        switch (status) {
+            case 'fulfilled': return CheckCircle;
+            case 'denied': return AlertTriangle;
+            case 'overdue': return AlertTriangle;
+            case 'processing': return Clock;
+            default: return FileText;
+        }
+    };
+
+    return (
+        <div className="p-6 space-y-8">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
+                            <FileSearch className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Public Records (FOIA) Request</h1>
+                            <p className="text-slate-600 mt-1">Generate and manage Freedom of Information Act requests.</p>
+                        </div>
+                    </div>
+                </div>
+
+                {!showBuilder ? (
+                    <div className="space-y-6">
+                        {/* FOIA Request Builder Card */}
+                        <Card className="border-0 shadow-lg bg-white">
+                            <CardHeader>
+                                <CardTitle className="text-xl font-bold text-slate-900">FOIA Request Builder</CardTitle>
+                                <p className="text-slate-600">The full FOIA request builder is under development. This tool will guide you through drafting a legally compliant request, sending it to the correct agency, and tracking its status.</p>
+                            </CardHeader>
+                            <CardContent>
+                                <Button 
+                                    onClick={() => setShowBuilder(true)}
+                                    className="bg-slate-700 hover:bg-slate-800"
+                                >
+                                    Start New Request
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        {/* Existing Requests */}
+                        <Card className="border-0 shadow-lg bg-white">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Building className="w-5 h-5 text-blue-600" />
+                                    Your FOIA Requests
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {isLoading ? (
+                                    <div className="space-y-4">
+                                        {Array(3).fill(0).map((_, i) => (
+                                            <div key={i} className="animate-pulse">
+                                                <div className="h-4 bg-slate-200 rounded w-3/4 mb-2"></div>
+                                                <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : requests.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <FileSearch className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                                        <h3 className="text-lg font-semibold text-slate-900 mb-2">No FOIA Requests Yet</h3>
+                                        <p className="text-slate-600">Start your first request to access government records</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {requests.map((request) => {
+                                            const StatusIcon = getStatusIcon(request.status);
+                                            return (
+                                                <div key={request.id} className="p-4 border border-slate-200 rounded-lg">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h3 className="font-semibold text-slate-900">{request.request_subject}</h3>
+                                                        <Badge className={`${getStatusColor(request.status)} border`}>
+                                                            <StatusIcon className="w-3 h-3 mr-1" />
+                                                            {request.status}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-sm text-slate-600 mb-2">Agency: {request.agency_name}</p>
+                                                    <div className="flex justify-between items-center text-xs text-slate-500">
+                                                        <span>Submitted: {format(new Date(request.date_submitted), 'MMM d, yyyy')}</span>
+                                                        <span>Deadline: {format(new Date(request.response_deadline), 'MMM d, yyyy')}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                ) : (
+                    /* FOIA Request Form */
+                    <Card className="border-0 shadow-lg bg-white">
+                        <form onSubmit={handleSubmit(onSubmit)}>
+                            <CardHeader>
+                                <CardTitle>Create New FOIA Request</CardTitle>
+                                <p className="text-slate-600">Fill out the details below to generate a professional FOIA request</p>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <Label htmlFor="agency_name">Government Agency</Label>
+                                        <Input 
+                                            id="agency_name" 
+                                            {...register("agency_name", { required: "Agency name is required" })} 
+                                            placeholder="e.g., FBI, City of Los Angeles, EPA"
+                                            defaultValue="Metropolis Police Department"
+                                        />
+                                        {errors.agency_name && <p className="text-red-500 text-xs mt-1">{errors.agency_name.message}</p>}
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="request_subject">Request Subject</Label>
+                                        <Input 
+                                            id="request_subject" 
+                                            {...register("request_subject", { required: "Subject is required" })} 
+                                            placeholder="Brief description of records sought"
+                                            defaultValue="Body cam footage from incident on 2024-01-15"
+                                        />
+                                        {errors.request_subject && <p className="text-red-500 text-xs mt-1">{errors.request_subject.message}</p>}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <Label htmlFor="request_description">Detailed Request Description</Label>
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            size="sm"
+                                            onClick={generateFOIARequest}
+                                            disabled={isGenerating || !watchSubject.trim()}
+                                        >
+                                            {isGenerating ? (
+                                                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</>
+                                            ) : (
+                                                <>Generate with AI</>
+                                            )}
+                                        </Button>
+                                    </div>
+                                    <Textarea 
+                                        id="request_description" 
+                                        {...register("request_description", { required: "Description is required" })} 
+                                        className="h-32"
+                                        placeholder="Describe the specific records you are seeking..."
+                                        defaultValue="Pursuant to the Freedom of Information Act, I request any and all body-worn camera footage from officers involved in the arrest of Jane Doe at 123 Main St on January 15, 2024, between 2:00 PM and 3:00 PM. Please include footage from Officer John Smith and any other responding officers."
+                                    />
+                                    {errors.request_description && <p className="text-red-500 text-xs mt-1">{errors.request_description.message}</p>}
+                                </div>
+
+                                <Alert className="bg-blue-50 border-blue-200">
+                                    <FileText className="h-4 w-4 text-blue-600" />
+                                    <AlertDescription className="text-blue-800">
+                                        <strong>Tip:</strong> Be specific about the records you want. Include date ranges, keywords, and specific departments when possible. This helps agencies locate responsive documents faster.
+                                    </AlertDescription>
+                                </Alert>
+                            </CardContent>
+                            <CardFooter className="flex justify-between">
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    onClick={() => setShowBuilder(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    type="submit" 
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                    disabled={isSubmitting}
+                                >
+                                    {isSubmitting ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                                    ) : (
+                                        'Submit FOIA Request'
+                                    )}
+                                </Button>
+                            </CardFooter>
+                        </form>
+                    </Card>
+                )}
+            </div>
+        </div>
+    );
+}

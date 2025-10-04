@@ -1,0 +1,126 @@
+
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { Search, FileText, Users, Archive, Shield, MapPin, Phone, Globe, FileAudio } from 'lucide-react'; // Added FileAudio
+import { Badge } from "@/components/ui/badge";
+
+const tools = [
+  { 
+    title: "FOIA Request Builder", 
+    description: "Draft, manage, and track Freedom of Information Act (FOIA) requests to obtain government records.", 
+    icon: FileText, 
+    link: createPageUrl("PublicRecordsRequest"), 
+    status: 'active' 
+  },
+  { 
+    title: "Audio Forensic Lab", 
+    description: "High-precision transcription and analysis of recorded conversations and audio evidence.", 
+    icon: FileAudio, 
+    link: createPageUrl("AudioForensicLab"), 
+    status: 'active',
+    featured: true
+  },
+  { 
+    title: "Officer Background Check", 
+    description: "Look up public records and complaint histories for law enforcement officers.", 
+    icon: Shield, 
+    link: createPageUrl("OfficerLookup"), 
+    status: 'active' 
+  },
+  { 
+    title: "Public Records Deep Dive", 
+    description: "AI-powered search across court records, property records, business filings, and more.", 
+    icon: Search, 
+    link: createPageUrl("PublicRecordsSearch"), 
+    status: 'active' 
+  },
+  { 
+    title: "Witness & Contact Locator", 
+    description: "Find current addresses, phone numbers, and background information on key individuals.", 
+    icon: Users, 
+    link: createPageUrl("WitnessLocator"), 
+    status: 'active' 
+  },
+  { 
+    title: "Location Intelligence", 
+    description: "Analyze crime statistics, demographic data, and incident patterns for any location.", 
+    icon: MapPin, 
+    link: createPageUrl("LocationIntelligence"), 
+    status: 'active' 
+  },
+  { 
+    title: "Social Media Investigation", 
+    description: "Ethically gather public social media evidence and track online activity.", 
+    icon: Globe, 
+    link: createPageUrl("SocialMediaInvestigation"), 
+    status: 'active' 
+  },
+  { 
+    title: "Universal Evidence Processor", 
+    description: "Securely archive webpages, documents, and digital evidence with timestamps.", 
+    icon: Archive, 
+    link: createPageUrl("DocumentAnalyzer"), 
+    status: 'active' 
+  }
+];
+
+export default function DigitalInvestigator() {
+  return (
+    <div className="p-6 space-y-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-slate-600 to-slate-800 rounded-xl flex items-center justify-center">
+              <Search className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Digital Private Investigator</h1>
+              <p className="text-slate-600 mt-1">Professional-grade investigation tools powered by AI.</p>
+            </div>
+          </div>
+          
+          <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-white mb-2 flex items-center gap-2">
+              <Shield className="w-5 h-5"/> Elite Investigation Suite
+            </h2>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Access the same tools used by professional investigators and law firms. All searches are conducted ethically and legally using public records and publicly available information.
+            </p>
+          </div>
+        </div>
+
+        {/* Tools Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {tools.map((tool) => (
+            <Card key={tool.title} className={`border-0 shadow-lg bg-white flex flex-col hover:shadow-xl transition-shadow ${tool.featured ? 'ring-2 ring-purple-200 bg-purple-50' : ''}`}>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div className="flex items-center gap-4">
+                   <tool.icon className={`w-8 h-8 ${tool.featured ? 'text-purple-700' : 'text-slate-700'}`} />
+                   <CardTitle className="text-lg">{tool.title}</CardTitle>
+                </div>
+                <div className="flex gap-2">
+                  {tool.featured && <Badge className="bg-purple-600 text-white">New</Badge>}
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Active</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-grow">
+                <p className="text-sm text-slate-600 mb-4">{tool.description}</p>
+              </CardContent>
+              <div className="p-6 pt-0">
+                <Link to={tool.link}>
+                  <Button className={`w-full ${tool.featured ? 'bg-purple-700 hover:bg-purple-800' : 'bg-slate-700 hover:bg-slate-800'}`}>
+                    Launch Tool
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
